@@ -81,7 +81,8 @@ Mirrors cache to `%LOCALAPPDATA%\xlr8\mirrors` automatically.
   /root/xlr8-target/release/xlr8 octocat/Hello-World --no-open --port 7777
   curl -w '%{time_total}\n' 'http://127.0.0.1:7777/api/stress/big/diff?base=base&head=head'
   ```
-- Measured on this device (6-core, PRoot ptrace overhead, release build):
+- Measured on this device (6-core, PRoot ptrace overhead, release build).
+  **Full numbers and the perf history live in `benchmark.md`**
 
   | workload | time |
   |---|---|
