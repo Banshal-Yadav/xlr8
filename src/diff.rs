@@ -270,103 +270,59 @@ fn count_lines(repo: &gix::Repository, id: gix::ObjectId) -> Result<u32> {
     Ok(String::from_utf8_lossy(&data).lines().count() as u32)
 }
 
-/// Count-only line diff (phase 1): same algorithm as diff_lines, zero per-line allocation.
+/// Count-only line diff (phase 1): imara-diff histogram (same engine gitoxide uses).
 fn line_stats(old: &str, new: &str) -> (u32, u32) {
-    let old_lines: Vec<&str> = old.lines().collect();
-    let new_lines: Vec<&str> = new.lines().collect();
+    let input = imara_diff::intern::InternedInput::new(old, new);
     let mut additions = 0u32;
     let mut deletions = 0u32;
-    let mut i = 0usize;
-    let mut j = 0usize;
-    while i < old_lines.len() && j < new_lines.len() {
-        if old_lines[i] == new_lines[j] {
-            i += 1;
-            j += 1;
-            continue;
-        }
-        let window = 80usize;
-        let mut matched: Option<(usize, usize)> = None;
-        let old_end = (i + 1 + window).min(old_lines.len());
-        let new_end = (j + 1 + window).min(new_lines.len());
-        'scan: for oi in (i + 1)..old_end {
-            for ni in (j + 1)..new_end {
-                if old_lines[oi] == new_lines[ni] {
-                    matched = Some((oi, ni));
-                    break 'scan;
-                }
-            }
-        }
-        match matched {
-            Some((oi, ni)) => {
-                deletions += (oi - i) as u32;
-                additions += (ni - j) as u32;
-                i = oi;
-                j = ni;
-            }
-            None => {
-                additions += 1;
-                deletions += 1;
-                i += 1;
-                j += 1;
-            }
-        }
-    }
-    deletions += (old_lines.len() - i) as u32;
-    additions += (new_lines.len() - j) as u32;
+    imara_diff::diff(
+        imara_diff::Algorithm::Myers,
+        &input,
+        |before: std::ops::Range<u32>, after: std::ops::Range<u32>| {
+            deletions += (before.end - before.start) as u32;
+            additions += (after.end - after.start) as u32;
+        },
+    );
     (additions, deletions)
 }
 
 /// Line diff: equality by line content. Returns (kind, text) where kind in add/del/ctx.
 pub fn diff_lines(old: &str, new: &str) -> Vec<(String, String)> {
-    let old_lines: Vec<&str> = old.lines().collect();
-    let new_lines: Vec<&str> = new.lines().collect();
-
-    let mut out = Vec::new();
-    let mut i = 0usize;
-    let mut j = 0usize;
-    while i < old_lines.len() && j < new_lines.len() {
-        if old_lines[i] == new_lines[j] {
-            out.push(("ctx".into(), old_lines[i].to_string()));
-            i += 1;
-            j += 1;
-            continue;
+    let input = imara_diff::intern::InternedInput::new(old, new);
+    let mut changes: Vec<(std::ops::Range<u32>, std::ops::Range<u32>)> = Vec::new();
+    imara_diff::diff(imara_diff::Algorithm::Myers, &input, |before, after| {
+        changes.push((before, after));
+    });
+    let mut out: Vec<(String, String)> = Vec::new();
+    let mut cursor = 0u32;
+    for (before, after) in changes {
+        while cursor < before.start {
+            out.push((
+                "ctx".into(),
+                input.interner[input.before[cursor as usize]].to_string(),
+            ));
+            cursor += 1;
         }
-        let window = 80usize;
-        let mut matched: Option<(usize, usize)> = None;
-        let old_end = (i + 1 + window).min(old_lines.len());
-        let new_end = (j + 1 + window).min(new_lines.len());
-        'scan: for oi in (i + 1)..old_end {
-            for ni in (j + 1)..new_end {
-                if old_lines[oi] == new_lines[ni] {
-                    matched = Some((oi, ni));
-                    break 'scan;
-                }
-            }
+        for i in before.clone() {
+            out.push((
+                "del".into(),
+                input.interner[input.before[i as usize]].to_string(),
+            ));
         }
-        match matched {
-            Some((oi, ni)) => {
-                for k in i..oi {
-                    out.push(("del".into(), old_lines[k].to_string()));
-                }
-                for k in j..ni {
-                    out.push(("add".into(), new_lines[k].to_string()));
-                }
-                i = oi;
-                j = ni;
-            }
-            None => {
-                out.push(("del".into(), old_lines[i].to_string()));
-                out.push(("add".into(), new_lines[j].to_string()));
-                i += 1;
-                j += 1;
-            }
+        for i in after {
+            out.push((
+                "add".into(),
+                input.interner[input.after[i as usize]].to_string(),
+            ));
         }
+        cursor = before.end;
     }
-    for k in i..old_lines.len() {
-        out.push(("del".into(), old_lines[k].to_string()));
-    }
-    for k in j..new_lines.len() {
-        out.push(("add".into(), new_lines[k].to_string()));
+    while cursor < input.before.len() as u32 {
+        out.push((
+            "ctx".into(),
+            input.interner[input.before[cursor as usize]].to_string(),
+        ));
+        cursor += 1;
     }
     out
 }

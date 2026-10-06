@@ -97,11 +97,15 @@ Mirrors cache to `%LOCALAPPDATA%\xlr8\mirrors` automatically.
 
 ## Perf gotchas (learned the hard way — don't regress)
 
-- Phase-1 stats **must stay allocation-free**: count on `&str` slices
-  (`line_stats`), never build per-line `String`s just to count.
+- Line diffing (stats **and** hunk output) goes through **imara-diff**
+  (`Algorithm::Myers`) — the engine gitoxide uses. Do not hand-roll diff
+  algorithms: the first home-made window matcher overcounted 10-50× on real
+  code (ripgrep `standard.rs`: +3333 vs git's +242).
+- Phase-1 stats must not build per-line `String`s just to count — closure
+  sink on `InternedInput`, count ranges only.
 - Blob stats are fanned over worker threads (`std::thread::spawn`, own
   `gix::open` per worker, results sorted back by original index).
-  Sequential blob loading was 13.3s for 2000 files; parallel+release → ~3s.
+  Sequential blob loading was 13.3s for 2000 files; parallel+release → ~2.4s.
 - `gix::diff_tree_to_tree` yields **directory** Modification entries too —
   filter with `entry_mode.is_tree()` on *all* variants (Add/Del/Mod/Rewrite),
   else phantom files appear (was 2200 vs git's 2000).
