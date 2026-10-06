@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>xlr8</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --fg:#e6edf3; --muted:#8b949e;
+          --add:#2ea04333; --del:#f8514933; --addfg:#3fb950; --delfrg:#f85149; --accent:#58a6ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  header { display:flex; gap:12px; align-items:center; padding:10px 16px; background:var(--panel); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5; }
+  header h1 { font-size:16px; margin:0; color:var(--accent); }
+  nav button { background:none; border:1px solid transparent; color:var(--muted); padding:4px 10px; cursor:pointer; border-radius:6px; font:inherit; }
+  nav button.active { color:var(--fg); border-color:var(--border); background:#21262d; }
+  main { padding:16px; max-width:1200px; margin:0 auto; }
+  select, input { background:#0d1117; color:var(--fg); border:1px solid var(--border); border-radius:6px; padding:4px 8px; font:inherit; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:8px; margin-bottom:12px; overflow:hidden; }
+  .card-h { padding:8px 12px; border-bottom:1px solid var(--border); display:flex; gap:10px; align-items:center; cursor:pointer; }
+  .card-h:hover { background:#1c2129; }
+  .stat { margin-left:auto; font-size:12px; }
+  .stat .a { color:var(--addfg); } .stat .d { color:var(--delfrg); }
+  .status { width:18px; text-align:center; font-weight:700; }
+  .status.A { color:var(--addfg); } .status.D { color:var(--delfrg); } .status.M { color:#d29922; } .status.R { color:var(--accent); }
+  .mono { color:var(--muted); font-size:12px; }
+  .lines { overflow-x:auto; }
+  .ln { display:flex; white-space:pre; }
+  .ln .n { width:48px; flex:none; text-align:right; padding-right:8px; color:var(--muted); user-select:none; background:#0d111799; position:sticky; left:0; }
+  .ln .t { padding-left:8px; }
+  .ln.add { background:var(--add); } .ln.add .t { color:var(--addfg); }
+  .ln.del { background:var(--del); } .ln.del .t { color:var(--delfrg); }
+  .row { padding:8px 12px; border-bottom:1px solid var(--border); display:flex; gap:12px; }
+  .row:last-child { border-bottom:none; }
+  .row .sha { color:var(--accent); cursor:pointer; }
+  .toolbar { display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap; }
+  .badge { background:#21262d; border:1px solid var(--border); border-radius:999px; padding:1px 8px; font-size:12px; color:var(--muted); }
+  .muted { color:var(--muted); }
+  #toast { position:fixed; bottom:16px; right:16px; background:#1c2129; border:1px solid var(--border); padding:8px 14px; border-radius:8px; display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>xlr8</h1>
+  <nav>
+    <button data-tab="commits" class="active">Commits</button>
+    <button data-tab="compare">Compare</button>
+    <button data-tab="pulls">Pulls</button>
+  </nav>
+  <span id="repo-label" class="muted"></span>
+</header>
+<main>
+  <div class="toolbar" id="repo-bar" style="display:none">
+    <span class="muted">repo:</span>
+    <select id="repo-select"></select>
+    <button id="sync-btn">sync</button>
+  </div>
+
+  <section id="tab-commits">
+    <div class="toolbar">
+      <select id="commits-ref"></select>
+      <span class="muted" id="commits-info"></span>
+    </div>
+    <div id="commits-list"></div>
+  </section>
+
+  <section id="tab-compare" style="display:none">
+    <div class="toolbar">
+      <select id="base-ref"></select><span class="muted">...</span><select id="head-ref"></select>
+      <button id="diff-btn">diff</button>
+      <span class="muted" id="diff-info"></span>
+    </div>
+    <div id="diff-summary"></div>
+    <div id="diff-file"></div>
+  </section>
+
+  <section id="tab-pulls" style="display:none">
+    <div id="pulls-list"><span class="muted">loading…</span></div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+let repo = null; // "owner/name"
+
+const $ = (s) => document.querySelector(s);
+const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.style.display = "block"; setTimeout(() => t.style.display = "none", 3000); };
+const api = async (path) => { const r = await fetch(path); if (!r.ok) throw new Error(await r.text()); return r.json(); };
+
+// tabs
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
+  ["commits","compare","pulls"].forEach(t => $("#tab-" + t).style.display = t === b.dataset.tab ? "" : "none");
+  if (b.dataset.tab === "pulls") loadPulls();
+});
+
+async function refreshRepos() {
+  const { repos } = await api("/api/repos");
+  const sel = $("#repo-select");
+  sel.innerHTML = "";
+  repos.forEach(r => { const o = document.createElement("option"); o.value = r; o.textContent = r; sel.appendChild(o); });
+  $("#repo-bar").style.display = repos.length ? "flex" : "none";
+  if (repos.length && !repo) { repo = repos[0]; sel.value = repo; onRepoChange(); }
+  else if (repo) { sel.value = repo; }
+}
+
+function onRepoChange() {
+  $("#repo-label").textContent = repo || "";
+  loadRefs().then(() => { loadCommits(); });
+}
+
+$("#repo-select").onchange = (e) => { repo = e.target.value; onRepoChange(); };
+$("#sync-btn").onclick = async () => {
+  if (!repo) return;
+  toast("syncing…");
+  fetch("/api/sync", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ repo }) })
+    .then(r => r.ok ? toast("synced") : r.text().then(t => toast("error: " + t)))
+    .catch(e => toast("error: " + e));
+};
+
+async function loadRefs() {
+  const { refs } = await api(`/api/${repo}/refs`);
+  for (const id of ["commits-ref","base-ref","head-ref"]) {
+    const sel = $("#" + id); sel.innerHTML = "";
+    refs.forEach(r => { const o = document.createElement("option"); o.value = r.name; o.textContent = r.name; sel.appendChild(o); });
+  }
+  const names = refs.map(r => r.name);
+  if (names.includes("main")) $("#base-ref").value = "main";
+  else if (names.includes("master")) $("#base-ref").value = "master";
+  if (names.length > 1) $("#head-ref").value = names.find(n => n !== $("#base-ref").value) || names[0];
+}
+
+async function loadCommits() {
+  const ref = $("#commits-ref").value;
+  const { commits } = await api(`/api/${repo}/commits?limit=50&ref=${encodeURIComponent(ref)}`);
+  $("#commits-info").textContent = commits.length + " commits";
+  $("#commits-list").innerHTML = commits.map(c => `
+    <div class="card"><div class="row">
+      <span class="sha" data-sha="${c.id}">${c.short_id}</span>
+      <span>${escapeHtml(c.summary)}</span>
+      <span class="muted" style="margin-left:auto">${escapeHtml(c.author)} · ${new Date(c.time*1000).toLocaleString()}</span>
+    </div></div>`).join("");
+  document.querySelectorAll(".sha").forEach(el => el.onclick = () => {
+    $("#base-ref").value = el.dataset.sha; // quick: set as base — full commit diff is v1.1
+    toast("set as base ref (commit diff via Compare tab is WIP)");
+  });
+}
+$("#commits-ref").onchange = loadCommits;
+
+$("#diff-btn").onclick = async () => {
+  const base = $("#base-ref").value, head = $("#head-ref").value;
+  $("#diff-info").textContent = "computing…";
+  const t0 = performance.now();
+  const s = await api(`/api/${repo}/diff?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
+  $("#diff-info").textContent = `${s.files.length} files  +${s.total_additions} −${s.total_deletions}  (${Math.round(performance.now()-t0)}ms)`;
+  $("#diff-file").innerHTML = "";
+  $("#diff-summary").innerHTML = s.files.map(f => `
+    <div class="card"><div class="card-h" data-path="${escapeAttr(f.path)}">
+      <span class="status ${f.status}">${f.status}</span>
+      <span>${escapeHtml(f.path)}</span>
+      ${f.old_path && f.old_path !== f.path ? `<span class="muted">← ${escapeHtml(f.old_path)}</span>` : ""}
+      <span class="stat"><span class="a">+${f.additions}</span> <span class="d">−${f.deletions}</span></span>
+    </div></div>`).join("");
+  document.querySelectorAll(".card-h[data-path]").forEach(el => el.onclick = () => openFile(base, head, el.dataset.path));
+};
+
+async function openFile(base, head, path) {
+  const fd = await api(`/api/${repo}/file?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}&path=${encodeURIComponent(path)}`);
+  let ln = 0;
+  const rows = fd.lines.map(l => {
+    ln++;
+    return `<div class="ln ${l.kind === 'add' ? 'add' : l.kind === 'del' ? 'del' : ''}">
+      <span class="n">${ln}</span><span class="t">${escapeHtml(l.text) || " "}</span></div>`;
+  }).join("");
+  $("#diff-file").innerHTML = `<div class="card"><div class="card-h">${escapeHtml(path)} <span class="muted">${fd.lines.length} lines</span></div><div class="lines">${rows}</div></div>`;
+}
+
+async function loadPulls() {
+  try {
+    const { pulls } = await api(`/api/${repo}/pulls`);
+    $("#pulls-list").innerHTML = pulls.map(p => `
+      <div class="card"><div class="row">
+        <span class="badge">#${p.number}</span>
+        <span>${escapeHtml(p.title)}</span>
+        <span class="muted" style="margin-left:auto">@${escapeHtml(p.user)} <span class="badge">${p.state}</span></span>
+      </div>
+      <div class="row"><span class="mono">${escapeHtml(p.base_ref)} ← ${escapeHtml(p.head_ref)}</span>
+      <span class="muted" style="margin-left:auto">${new Date(p.updated_at).toLocaleString()}</span></div></div>`).join("")
+      || '<span class="muted">no open pull requests</span>';
+  } catch (e) { $("#pulls-list").innerHTML = `<span class="muted">PR load failed: ${escapeHtml(String(e))} (set GITHUB_TOKEN if rate-limited)</span>`; }
+}
+
+const escapeHtml = (s) => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const escapeAttr = escapeHtml;
+
+refreshRepos().then(() => { if (repo) onRepoChange(); }).catch(e => toast(String(e)));
+</script>
+</body>
+</html>
