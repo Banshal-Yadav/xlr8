@@ -1,7 +1,7 @@
-use crate::{diff, github, mirror, AppState};
+use crate::{diff, mirror, AppState};
 use axum::extract::{Path, Query, State};
-use axum::http::{header, StatusCode};
-use axum::response::{Html, IntoResponse};
+use axum::http::StatusCode;
+use axum::response::Html;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;

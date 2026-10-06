@@ -46,19 +46,20 @@ fn commit_of<'r>(repo: &'r gix::Repository, spec: &str) -> Result<gix::Commit<'r
         .with_context(|| format!("resolve {spec}"))?;
     repo.find_object(id.detach())
         .with_context(|| format!("load {spec}"))?
-        .try_into_commit()
+        .peel_to_commit()
         .with_context(|| format!("{spec} is not a commit"))
 }
 
 fn blob_bytes(repo: &gix::Repository, id: gix::ObjectId) -> Result<Option<Vec<u8>>> {
-    let obj = repo.find_object(id)?;
+    let mut obj = repo.find_object(id)?;
     if !obj.kind.is_blob() {
         return Ok(None);
     }
-    Ok(Some(obj.data.clone()))
+    Ok(Some(std::mem::take(&mut obj.data)))
 }
 
 /// Phase 1: full file list + line stats for a ref range (base..head).
+/// Single tree walk, then per-file blob stats fanned out over worker threads.
 pub fn compare(mirror: &PathBuf, base: &str, head: &str) -> Result<DiffSummary> {
     let repo = open_repo(mirror)?;
     let base_commit = commit_of(&repo, base)?;
@@ -66,17 +67,68 @@ pub fn compare(mirror: &PathBuf, base: &str, head: &str) -> Result<DiffSummary> 
     let base_tree = base_commit.tree()?;
     let head_tree = head_commit.tree()?;
 
-    let changes = repo.diff_tree_to_tree(
-        Some(&base_tree),
-        Some(&head_tree),
-        None::<gix::diff::Options>,
-    )?;
+    let t0 = std::time::Instant::now();
+    let changes: Vec<(usize, Change)> = repo
+        .diff_tree_to_tree(Some(&base_tree), Some(&head_tree), None::<gix::diff::Options>)?
+        .into_iter()
+        .enumerate()
+        .collect();
 
-    let mut files = Vec::new();
+    let n_threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .clamp(1, 8);
+    let chunk = changes.len().div_ceil(n_threads).max(1);
+    let t1 = std::time::Instant::now();
+
+    let mut handles = Vec::new();
+    let mut rest = changes.into_iter();
+    loop {
+        let part: Vec<(usize, Change)> = rest.by_ref().take(chunk).collect();
+        if part.is_empty() {
+            break;
+        }
+        let mp = mirror.clone();
+        handles.push(std::thread::spawn(move || stat_chunk(&mp, part)));
+    }
+
+    let mut collected: Vec<(usize, FileStat)> = Vec::new();
+    for h in handles {
+        let part = h
+            .join()
+            .map_err(|_| anyhow::anyhow!("stats worker panicked"))??;
+        collected.extend(part);
+    }
+    collected.sort_by_key(|(i, _)| *i);
+
+    let mut files = Vec::with_capacity(collected.len());
     let mut total_additions = 0u32;
     let mut total_deletions = 0u32;
+    for (_, stat) in collected {
+        total_additions += stat.additions;
+        total_deletions += stat.deletions;
+        files.push(stat);
+    }
+    tracing::info!(
+        "compare total {:?} (incl. stats workers {:?}) for {} files",
+        t0.elapsed(),
+        t1.elapsed(),
+        files.len()
+    );
 
-    for change in changes {
+    Ok(DiffSummary {
+        base: base.to_string(),
+        head: head.to_string(),
+        files,
+        total_additions,
+        total_deletions,
+    })
+}
+
+fn stat_chunk(mirror: &PathBuf, changes: Vec<(usize, Change)>) -> Result<Vec<(usize, FileStat)>> {
+    let repo = open_repo(mirror)?;
+    let mut out = Vec::with_capacity(changes.len());
+    for (idx, change) in changes {
         let (path, old_path, status, old_id, new_id, is_tree) = match change {
             Change::Addition {
                 location,
@@ -106,6 +158,7 @@ pub fn compare(mirror: &PathBuf, base: &str, head: &str) -> Result<DiffSummary> 
             ),
             Change::Modification {
                 location,
+                entry_mode,
                 previous_id,
                 id,
                 ..
@@ -115,10 +168,11 @@ pub fn compare(mirror: &PathBuf, base: &str, head: &str) -> Result<DiffSummary> 
                 "M",
                 Some(previous_id),
                 Some(id),
-                false,
+                entry_mode.is_tree(),
             ),
             Change::Rewrite {
                 location,
+                entry_mode,
                 source_location,
                 source_id,
                 id,
@@ -130,7 +184,7 @@ pub fn compare(mirror: &PathBuf, base: &str, head: &str) -> Result<DiffSummary> 
                 if copy { "C" } else { "R" },
                 Some(source_id),
                 Some(id),
-                false,
+                entry_mode.is_tree(),
             ),
         };
 
@@ -149,33 +203,27 @@ pub fn compare(mirror: &PathBuf, base: &str, head: &str) -> Result<DiffSummary> 
                 {
                     (0, 0, true)
                 } else {
-                    let old_text = old_data.map(|d| String::from_utf8_lossy(&d).to_string()).unwrap_or_default();
-                    let new_text = new_data.map(|d| String::from_utf8_lossy(&d).to_string()).unwrap_or_default();
+                    let old_text = String::from_utf8_lossy(old_data.as_deref().unwrap_or(b""));
+                    let new_text = String::from_utf8_lossy(new_data.as_deref().unwrap_or(b""));
                     let (a, d) = line_stats(&old_text, &new_text);
                     (a, d, false)
                 }
             }
             (None, None) => (0, 0, false),
         };
-        total_additions += additions;
-        total_deletions += deletions;
-        files.push(FileStat {
-            path,
-            old_path,
-            status: status.to_string(),
-            additions,
-            deletions,
-            binary,
-        });
+        out.push((
+            idx,
+            FileStat {
+                path,
+                old_path,
+                status: status.to_string(),
+                additions,
+                deletions,
+                binary,
+            },
+        ));
     }
-
-    Ok(DiffSummary {
-        base: base.to_string(),
-        head: head.to_string(),
-        files,
-        total_additions,
-        total_deletions,
-    })
+    Ok(out)
 }
 
 /// Phase 2: per-file line diff, computed on demand.
@@ -192,6 +240,9 @@ pub fn file_diff(mirror: &PathBuf, base: &str, head: &str, path: &str) -> Result
     let new_id = head_tree
         .lookup_entry_by_path(path)?
         .map(|e| e.object_id());
+    if old_id.is_none() && new_id.is_none() {
+        anyhow::bail!("path not found in either ref: {path}");
+    }
 
     let old_bytes: Option<Vec<u8>> = match old_id {
         Some(id) => blob_bytes(&repo, id)?,
@@ -219,16 +270,49 @@ fn count_lines(repo: &gix::Repository, id: gix::ObjectId) -> Result<u32> {
     Ok(String::from_utf8_lossy(&data).lines().count() as u32)
 }
 
+/// Count-only line diff (phase 1): same algorithm as diff_lines, zero per-line allocation.
 fn line_stats(old: &str, new: &str) -> (u32, u32) {
+    let old_lines: Vec<&str> = old.lines().collect();
+    let new_lines: Vec<&str> = new.lines().collect();
     let mut additions = 0u32;
     let mut deletions = 0u32;
-    for (kind, _) in diff_lines(old, new) {
-        match kind.as_str() {
-            "add" => additions += 1,
-            "del" => deletions += 1,
-            _ => {}
+    let mut i = 0usize;
+    let mut j = 0usize;
+    while i < old_lines.len() && j < new_lines.len() {
+        if old_lines[i] == new_lines[j] {
+            i += 1;
+            j += 1;
+            continue;
+        }
+        let window = 80usize;
+        let mut matched: Option<(usize, usize)> = None;
+        let old_end = (i + 1 + window).min(old_lines.len());
+        let new_end = (j + 1 + window).min(new_lines.len());
+        'scan: for oi in (i + 1)..old_end {
+            for ni in (j + 1)..new_end {
+                if old_lines[oi] == new_lines[ni] {
+                    matched = Some((oi, ni));
+                    break 'scan;
+                }
+            }
+        }
+        match matched {
+            Some((oi, ni)) => {
+                deletions += (oi - i) as u32;
+                additions += (ni - j) as u32;
+                i = oi;
+                j = ni;
+            }
+            None => {
+                additions += 1;
+                deletions += 1;
+                i += 1;
+                j += 1;
+            }
         }
     }
+    deletions += (old_lines.len() - i) as u32;
+    additions += (new_lines.len() - j) as u32;
     (additions, deletions)
 }
 

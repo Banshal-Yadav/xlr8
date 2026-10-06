@@ -75,25 +75,53 @@ Mirrors cache to `%LOCALAPPDATA%\xlr8\mirrors` automatically.
 - IPv6 is broken on this device → IPv4 pinned in `/etc/hosts`
   (crates.io, static.rust-lang.org, github.com, ubuntu mirrors).
   **New hosts may need pinning** if network calls hang.
-- Test end-to-end:
+- Test end-to-end (release binary — perf numbers only make sense in release):
   ```bash
-  /root/xlr8-target/debug/xlr8 octocat/Hello-World --no-open --port 7777
-  curl 'http://127.0.0.1:7777/api/octocat/Hello-World/diff?base=master&head=test'
+  CARGO_TARGET_DIR=/root/xlr8-target cargo build --release
+  /root/xlr8-target/release/xlr8 octocat/Hello-World --no-open --port 7777
+  curl -w '%{time_total}\n' 'http://127.0.0.1:7777/api/stress/big/diff?base=base&head=head'
   ```
-- Baseline timings (tiny repo, localhost): diff ~36-68ms, file ~29-47ms
-  (mostly HTTP overhead).
+- Measured on this device (6-core, PRoot ptrace overhead, release build):
+
+  | workload | time |
+  |---|---|
+  | synthetic 2000-file compare | ~3-5s (git CLI baseline: 5.6s) |
+  | ripgrep 254 files +73k/-22k | 96ms |
+  | ripgrep 91 files +14k/-12k | 111ms |
+  | file diff 485 lines | 41ms |
+  | giant 20k-line file diff | 251ms |
+  | refs / commits(50) | 38ms / 21-132ms |
+
 - The same `Cargo.lock` builds on Windows — commit lockfile changes.
+
+## Perf gotchas (learned the hard way — don't regress)
+
+- Phase-1 stats **must stay allocation-free**: count on `&str` slices
+  (`line_stats`), never build per-line `String`s just to count.
+- Blob stats are fanned over worker threads (`std::thread::spawn`, own
+  `gix::open` per worker, results sorted back by original index).
+  Sequential blob loading was 13.3s for 2000 files; parallel+release → ~3s.
+- `gix::diff_tree_to_tree` yields **directory** Modification entries too —
+  filter with `entry_mode.is_tree()` on *all* variants (Add/Del/Mod/Rewrite),
+  else phantom files appear (was 2200 vs git's 2000).
+- Annotated tags: `rev_parse_single` returns a tag object → use
+  `Object::peel_to_commit()`, not `try_into_commit()`.
+- Debug builds are ~3-4× slower here; benchmark release only.
 
 ## Status / roadmap
 
 - [x] v0.1 scaffold: mirror, diff engine, refs/commits, web UI, PR list
+- [x] benchmark + fix loop: parallel stats, tree-entry filter, tag peeling,
+      verified file counts match `git diff --numstat` exactly
 - [ ] smoke test on Windows laptop (`cargo build --release`, open UI)
-- [ ] real big-repo benchmark (linux kernel scale) + fix what's slow
+- [ ] hunk-window file diffs (currently returns whole file — 1.3MB for a
+      20k-line file; GitHub-style ±3 context lines)
 - [ ] virtualized diff rendering (only visible lines in DOM)
 - [ ] PR "files changed" tab using local diff of PR head/base SHAs
 - [ ] syntax highlighting (syntect, must be cached to keep ms claim)
 - [ ] word-level intra-line diff, rename-aware stats tuning
 - [ ] diff chunk cache (persist computed hunks)
+- [ ] file_diff 404 (currently 500 with message — fine, could be 404)
 
 ## Conventions
 
