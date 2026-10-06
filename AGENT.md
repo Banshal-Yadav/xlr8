@@ -43,9 +43,26 @@ Naming history: crate name `xlr8` was chosen after checking crates.io
 availability (gitbox/pdx/zif/gbx taken; p0x/sau0n/braket free but rejected).
 Rename is still possible until first `cargo publish`.
 
-## Build & test (this environment)
+## Build & test
 
-Android PRoot Ubuntu rootfs — quirks are real, don't fight them:
+Cross-platform: Linux, macOS, **Windows**. No unix-only deps — keep it that
+way (no `libc`/`nix`, no hardcoded `/tmp` paths; use `dirs`, `PathBuf`,
+`std::process::Command`). Runtime requirement: **git on PATH**
+(clone/fetch shells out to `git`; Git for Windows counts).
+
+### Windows laptop
+
+```powershell
+# one-time: install rustup.rs + Git for Windows
+cargo build --release
+.\target\release\xlr8.exe octocat\Hello-World   # or owner/repo
+# → opens http://127.0.0.1:<port>
+```
+
+Mirrors cache to `%LOCALAPPDATA%\xlr8\mirrors` automatically.
+`GITHUB_TOKEN`/`GH_TOKEN` env var optional (PR tab rate limits).
+
+### Android PRoot (this device) — quirks are real, don't fight them
 
 - **`/mnt/sdcard` is noexec** → always build with:
   ```bash
@@ -65,10 +82,12 @@ Android PRoot Ubuntu rootfs — quirks are real, don't fight them:
   ```
 - Baseline timings (tiny repo, localhost): diff ~36-68ms, file ~29-47ms
   (mostly HTTP overhead).
+- The same `Cargo.lock` builds on Windows — commit lockfile changes.
 
 ## Status / roadmap
 
 - [x] v0.1 scaffold: mirror, diff engine, refs/commits, web UI, PR list
+- [ ] smoke test on Windows laptop (`cargo build --release`, open UI)
 - [ ] real big-repo benchmark (linux kernel scale) + fix what's slow
 - [ ] virtualized diff rendering (only visible lines in DOM)
 - [ ] PR "files changed" tab using local diff of PR head/base SHAs
