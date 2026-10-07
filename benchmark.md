@@ -133,6 +133,7 @@ repeat. Both include HTTP + JSON.
 | 12 | blob cache | per-mirror memo of blob bytes (`repo.rs`, 64 MB cap, cleared on that mirror's pull) — warm requests skip pack lookup + inflate entirely | stress **253 → 96 ms** (stats 175→38 ms), rg15y **88 → 54 ms** |
 | 13 | real-repo validation + rename resolver fix | libuv exposed source-id-order greedy resolution pairing wrong files (`uv-linux.h → sysinfo-memory.c`) → global best-first assignment (sort by similarity desc, ties by index, greedy with emitted check) | libuv 15/16 of git's pairs exact (was several absurd pairings), tokio 29/29 exact; prior suites still exact |
 | 14 | sub-ms pass | typed `Json<T>` (axum's `Json(value)` double-serializes), `TCP_NODELAY` (axum sets none → Nagle), `Arc<[u8]>` blob cache (no clone per consumer), cached `available_parallelism`/`cache_dir`/CPU count, object cache on every gix handle, inline stats for ≤16 files, sequential rename scoring for ≤64 pairs, response cache (serialized JSON per mirror+request, cleared on sync), `DEBUG`-gated phase logs (default skips 2 stderr writes/request) | warm endpoints **1.4–12 ms** (hello keep-alive **0.68 ms**), compute path −5–15% (uvL 129→90, tkL 158→139); output **byte-identical** to pre-pass build |
+| 15 | Windows cold-path pass | startup prewarm (repo open + HEAD at boot, off request path), split thread caps (stats→16, renames→8 — A/B via `XLR8_THREADS`), sharded blob cache (1 global mutex → 16-way striping) | stress cold **179→54 ms (3.3×)**, rg15y 79→36 ms; **every row beats git** on laptop; parity byte-identical |
 
 ## Correctness ledger (bugs found and fixed by comparing to git)
 
@@ -200,7 +201,133 @@ are **0.5-threshold boundary cases** where git's xdl byte accounting lands
    correctness-critical path; parallel already (6 workers). Only a result
    cache sits in front of it.
 
-## Reproduce
+## Windows laptop — full re-run (2026-10-07)
+
+Every row above re-run on real hardware (no PRoot), same methodology:
+`curl -w '%{time_total}'`, release binary, packed mirrors, warm page cache
+(mirrors freshly cloned; OS-cold not forced — Windows has no `drop_caches`).
+"CACHED" = response-cache hit on a repeat request; first hit after process
+start = compute (blob cache empty → stats includes the cache fill).
+
+### Device & environment
+
+| | |
+|---|---|
+| Laptop | **Acer Nitro ANV15-41** |
+| CPU | **AMD Ryzen 7 7735HS** (8 cores / 16 threads, base 3.2 GHz) |
+| RAM | 16 GB |
+| GPU | RTX 4050 Laptop GPU (6 GB) + Radeon iGPU |
+| Storage | **Kingston NVMe SSD** (OM8SEP4512Q, 512 GB) |
+| OS | Windows 11 (build 26200) |
+| Toolchain | git 2.49.0.windows.1, cargo 1.98.0, `cargo build --release` |
+| vs phone | no ptrace/PRoot tax, real syscalls, NVMe, higher clocks |
+
+### Head-to-head: xlr8 vs git CLI (same device, packed mirror, warm)
+
+After the cold-path pass (see "Cold-path fixes" below).
+
+| Range | Files | xlr8 (compute) | xlr8 (cached) | git CLI | speedup (compute) |
+|---|---|---|---|---|---|
+| stress `base..head` | 2000 | **54 ms** | **0.7–1.1 ms** | 79 ms | **≈1.5×** |
+| ripgrep `0.1.0..15.2.0` | 252 | **36 ms** | 0.8 ms | 76 ms | **≈2.1×** |
+| ripgrep `14.1.1..15.1.0` | 91 | **9.7 ms** | 0.8 ms | 54 ms | **≈5.6×** |
+| libuv `v1.0.0..v1.53.0` | 495 | **46 ms** | 1.1 ms | 109 ms | **≈2.4×** |
+| libuv `v1.49.0..v1.53.0` | 194 | **13 ms** | 0.9 ms | 79 ms | **≈5.9×** |
+| tokio `1.0.0..1.53.2` | 867 | **81 ms** | 0.9–1.2 ms | 134 ms | **≈1.7×** |
+| tokio `1.50.0..1.53.2` | 298 | **12.5 ms** | 0.9 ms | 75 ms | **≈6.0×** |
+
+**Every row beats git.** (Pre-fix: stress row lost — 143–179 ms vs git 79 ms.)
+
+Notes:
+- tokio tags are `tokio-1.0.0`-style; benchmark URLs above use real tag names.
+- Compute column = first request after process start (cold-proc). Server-side
+  phase timings below; HTTP+JSON adds ~1–5 ms.
+
+### Cold-path fixes (stress row was losing → now wins)
+
+First run: stress **143–179 ms vs git 79 ms** — git won that row. Anatomy of
+the cold hit: repo open + pack index ~50 ms deferred to first request, plus
+blob-cache fill (4000 loads) 54–90 ms in stats — while the warm engine was
+already **4.3 ms** (≈12× faster than git). Three fixes, A/B-measured:
+
+1. **Startup prewarm** (`main.rs`): open each mirror + read HEAD and its tree
+   entries *before* serving. Moves ~50 ms of repo open + pack index load off
+   the request path. Logged at boot: `prewarm … in 47 ms`.
+2. **Split thread caps** (`repo.rs`, `rewrite.rs`): stats fill scales to 16
+   threads (stress 88→54 ms); rename scoring *regresses* at 16 (60→76 ms —
+   memory-bound blob loads, SMT sibling contention) → renames cap at 8.
+   New `XLR8_THREADS` env override for A/B.
+3. **Sharded blob cache** (`repo.rs`): single global `Mutex<BlobCache>` was a
+   serialization point for 16 workers → 16-way lock striping (per-shard 4 MB
+   cap, DefaultHasher on path+id; `invalidate` walks all shards).
+
+Result: stress cold **179 → 54 ms (3.3×)**; every row now beats git.
+Correctness re-verified byte-identical after all three fixes (rg
+252/+72 442/−21 356, stress 2000/+4 000/−0, tokio 867/+127 896/−24 244).
+
+### Phase breakdown (warm, `RUST_LOG=debug`)
+
+Post-fix values; pre-fix in parens where changed.
+
+| Range | walk | renames | stats | total (server) |
+|---|---|---|---|---|
+| stress 2000 files | 7.2 ms | 0.08 ms | **40 ms** (was 90) | **51 ms** (was 140–177) |
+| rg 252 files | 1.5 ms | 27 ms | 3.0 ms | 34 ms |
+| rg 91 files | 1.5 ms | 0.6 ms | 5.9 ms | 8.4 ms |
+| libuv 495 files | 1.9 ms | 21 ms | 16.6 ms | 43 ms |
+| libuv 194 files | 1.7 ms | 0.5 ms | 9.1 ms | 11.8 ms |
+| tokio 867 files | 4.3 ms | **60 ms** (76 at 16 thr) | 10.9 ms | 79 ms |
+| tokio 298 files | 3.4 ms | 0.9 ms | 6.4 ms | 11 ms |
+
+Rename scoring still the bottleneck on big ranges (tokio: 60 ms of 79 ms) —
+but **≈1.6–2× faster than the phone** (93–129 ms). Small ranges skip the
+parallel path entirely (≤64 pairs → sequential, sub-ms).
+
+### Other endpoints (cold-proc → cached)
+
+| Request | Laptop | Phone |
+|---|---|---|
+| refs tokio (first hit) | **24 ms** → 1.0 ms | 187 ms → 1.4–15 ms |
+| commits?n=50 (rg) | 2.3 ms → 1.0 ms | 7.5–12 ms → 1.7–12.6 ms |
+| file diff rg `crates/core/main.rs` | **1.6–1.8 ms** → 0.9 ms | 43–56 ms → 1.3–2.7 ms |
+| file diff stress `giant2.txt` (20k lines) | 9.4 ms | 44–66 ms |
+| hello diff `7a6b19cf..main` | 22 ms (repo open) → 1.4 ms | 33 ms → 0.68–9 ms |
+| index `/` | **0.8–1.1 ms** | 1.9–11 ms |
+| keep-alive repeat (browser-style) | **0.71–1.1 ms** | 0.68–1.5 ms |
+
+### Correctness
+
+Output **identical to the phone run** on every range (file counts and
+totals match the git-exact numbers documented above): rg 252/+72 442/−21 356,
+rg91 91/+3 607/−1 073, libuv 495/+80 354/−24 096, tokio 867/+127 896/−24 244,
+stress 2000/+4 000/−0. Cross-device, byte-level parity — the ± deltas vs git
+are the documented imara-vs-xdiff ambiguity, unchanged.
+
+### Headline deltas (laptop vs phone)
+
+- Cached responses: **0.7–1.1 ms** vs 1.5–15 ms
+- tokio long compute: **81 ms** vs 139 ms
+- rename scoring (tokio): **60 ms** vs 93–129 ms
+- refs first hit (tokio): **24 ms** vs 187 ms
+- file diff (rg main.rs): **1.6 ms** vs 43–56 ms (cold-proc both)
+- stress cold: **54 ms** vs 78–109 ms — and git baseline also got faster
+  without PRoot (79 ms vs 143 ms); after the cold-path fixes xlr8 still
+  wins every row
+
+### Reproduce (Windows)
+
+```powershell
+# fixtures: gen_stress.sh has CRLF — strip before running under WSL bash
+#   bash: tr -d '\r' < bench/gen_stress.sh > /tmp/gen.sh && bash /tmp/gen.sh <src>
+# WSL /tmp is tmpfs (wiped on VM idle) — generate under %TEMP% instead
+git clone --mirror <stress-src> "$env:LOCALAPPDATA\xlr8\mirrors\stress_big.git"
+git -C "$env:LOCALAPPDATA\xlr8\mirrors\stress_big.git" repack -adq
+$env:RUST_LOG="debug"; .\target\release\xlr8.exe owner/repo --no-open --port 7777
+curl.exe -w '%{time_total}' -o NUL 'http://127.0.0.1:7777/api/stress/big/diff?base=base&head=head'
+git -C "$env:LOCALAPPDATA\xlr8\mirrors\stress_big.git" diff --numstat -M base head
+```
+
+## Reproduce (phone)
 
 ```bash
 # 1. generate + install the stress mirror (packed!)

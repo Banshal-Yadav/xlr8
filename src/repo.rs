@@ -6,37 +6,53 @@ static REPOS: OnceLock<RwLock<RepoMap>> = OnceLock::new();
 type RepoMap = std::collections::HashMap<PathBuf, Arc<gix::ThreadSafeRepository>>;
 
 /// Per-mirror blob memo: warm requests skip pack lookup + inflate entirely.
-/// Cleared wholesale on overflow or on that mirror's pull.
+///
+/// Sharded 16-way (power of two → mask in `shard_idx`): one global mutex
+/// serialized all workers; now each shard locks itself and overflow clears
+/// only that shard. Evicted wholesale for a mirror on its pull (`invalidate`).
 const BLOB_CACHE_CAP: usize = 64 << 20;
-struct BlobCache {
+const BLOB_SHARDS: usize = 16;
+struct BlobShard {
     map: HashMap<PathBuf, HashMap<gix::ObjectId, Arc<[u8]>>>,
     bytes: usize,
 }
-static BLOBS: OnceLock<Mutex<BlobCache>> = OnceLock::new();
+static BLOBS: OnceLock<[Mutex<BlobShard>; BLOB_SHARDS]> = OnceLock::new();
 
-fn blobs() -> &'static Mutex<BlobCache> {
+fn blobs() -> &'static [Mutex<BlobShard>; BLOB_SHARDS] {
     BLOBS.get_or_init(|| {
-        Mutex::new(BlobCache {
-            map: HashMap::new(),
-            bytes: 0,
+        std::array::from_fn(|_| {
+            Mutex::new(BlobShard {
+                map: HashMap::new(),
+                bytes: 0,
+            })
         })
     })
 }
 
+fn shard_idx(path: &Path, id: &gix::ObjectId) -> usize {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut h);
+    id.hash(&mut h);
+    (h.finish() as usize) & (BLOB_SHARDS - 1)
+}
+
 pub fn blob_get(path: &Path, id: gix::ObjectId) -> Option<Arc<[u8]>> {
-    blobs().lock().ok()?.map.get(path)?.get(&id).cloned()
+    let s = blobs()[shard_idx(path, &id)].lock().ok()?;
+    s.map.get(path)?.get(&id).cloned()
 }
 
 pub fn blob_put(path: &Path, id: gix::ObjectId, data: Arc<[u8]>) {
-    let Ok(mut g) = blobs().lock() else {
+    let Ok(mut s) = blobs()[shard_idx(path, &id)].lock() else {
         return;
     };
-    if g.bytes + data.len() > BLOB_CACHE_CAP {
-        g.map.clear();
-        g.bytes = 0;
+    let cap = BLOB_CACHE_CAP / BLOB_SHARDS;
+    if s.bytes + data.len() > cap {
+        s.map.clear();
+        s.bytes = 0;
     }
-    g.bytes += data.len();
-    g.map.entry(path.to_path_buf()).or_default().insert(id, data);
+    s.bytes += data.len();
+    s.map.entry(path.to_path_buf()).or_default().insert(id, data);
 }
 
 pub fn get(path: &Path) -> anyhow::Result<Arc<gix::ThreadSafeRepository>> {
@@ -65,14 +81,22 @@ pub fn handle(tsr: &gix::ThreadSafeRepository) -> gix::Repository {
     repo
 }
 
-/// CPU count, probed once — `available_parallelism` is a syscall per call.
+/// Worker cap for parallel stats/scoring: CPU count, probed once
+/// (`available_parallelism` is a syscall per call), clamped to 16.
+/// Rename scoring tightens this further — see rewrite.rs.
+/// Override for A/B: `XLR8_THREADS=N`.
 pub fn n_threads() -> usize {
     static N: OnceLock<usize> = OnceLock::new();
     *N.get_or_init(|| {
+        if let Ok(v) = std::env::var("XLR8_THREADS") {
+            if let Ok(n) = v.parse::<usize>() {
+                return n.clamp(1, 64);
+            }
+        }
         std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(4)
-            .clamp(1, 8)
+            .clamp(1, 16)
     })
 }
 
@@ -82,9 +106,11 @@ pub fn invalidate(path: &Path) {
             m.remove(path);
         }
     }
-    if let Ok(mut g) = blobs().lock() {
-        if let Some(v) = g.map.remove(path) {
-            g.bytes -= v.values().map(|v| v.len()).sum::<usize>();
+    for shard in blobs() {
+        if let Ok(mut s) = shard.lock() {
+            if let Some(v) = s.map.remove(path) {
+                s.bytes -= v.values().map(|v| v.len()).sum::<usize>();
+            }
         }
     }
     crate::diff::clear_ref_cache(path);

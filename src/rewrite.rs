@@ -215,7 +215,10 @@ pub fn detect(
     if !dests.is_empty() && !srcs.is_empty() && srcs.len() * dests.len() <= RENAME_LIMIT {
         let srcs = Arc::new(srcs);
         let n_pairs = srcs.len() * dests.len();
-        let n_threads = crate::repo::n_threads().min(dests.len());
+        // rename scoring caps at 8: A/B on 8c/16t — 16 threads regressed
+        // 60→76 ms (memory-bound blob loads, SMT contention), while stats
+        // fill wants every thread (stress 88→54 ms). Split caps.
+        let n_threads = crate::repo::n_threads().min(8).min(dests.len());
 
         let mut fuzzy: Vec<(usize, usize, f32)> = Vec::new();
         // thread spawn costs more than scoring a handful of pairs
