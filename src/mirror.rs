@@ -45,13 +45,67 @@ pub fn mirror_path(repo: &RepoRef) -> PathBuf {
     cache_dir().join("mirrors").join(format!("{}.git", repo.slug()))
 }
 
-pub fn cache_dir() -> PathBuf {
-    dirs::cache_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("xlr8")
+/// Resolved once: env lookups + joins on every API hit add up.
+pub fn cache_dir() -> &'static PathBuf {
+    static DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    DIR.get_or_init(compute_cache_dir)
 }
 
-/// Ensure a bare mirror exists locally and fetch updates.
+fn compute_cache_dir() -> PathBuf {
+    let base = std::env::var_os("XDG_CACHE_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| {
+            #[cfg(windows)]
+            {
+                std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
+            }
+            #[cfg(not(windows))]
+            {
+                None
+            }
+        })
+        .unwrap_or_else(|| {
+            let home = std::env::var_os("HOME")
+                .or_else(|| std::env::var_os("USERPROFILE"))
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("."));
+            #[cfg(target_os = "macos")]
+            {
+                home.join("Library").join("Caches")
+            }
+            #[cfg(all(not(windows), not(target_os = "macos")))]
+            {
+                home.join(".cache")
+            }
+            #[cfg(windows)]
+            {
+                home.join("AppData").join("Local")
+            }
+        });
+    base.join("xlr8")
+}
+
+/// repos present in the local mirror cache, parsed back from `owner_name.git`
+pub fn cached_repos() -> Vec<RepoRef> {
+    let mut out = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(cache_dir().join("mirrors")) {
+        for e in rd.flatten() {
+            let file = e.file_name().to_string_lossy().to_string();
+            if let Some(slug) = file.strip_suffix(".git") {
+                let parts: Vec<&str> = slug.splitn(2, '_').collect();
+                if parts.len() == 2 {
+                    out.push(RepoRef {
+                        owner: parts[0].to_string(),
+                        name: parts[1].to_string(),
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
 pub fn sync(repo: &RepoRef) -> Result<PathBuf> {
     let path = mirror_path(repo);
     if path.join("HEAD").exists() {
@@ -66,7 +120,7 @@ fn clone_mirror(repo: &RepoRef, dest: &PathBuf) -> Result<()> {
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    tracing::info!("cloning mirror {}", repo.canonical());
+    crate::info!("cloning mirror {}", repo.canonical());
     let status = Command::new("git")
         .args(["clone", "--mirror", "-q", &repo.https_url()])
         .arg(dest)
@@ -79,7 +133,6 @@ fn clone_mirror(repo: &RepoRef, dest: &PathBuf) -> Result<()> {
 }
 
 fn fetch(repo: &RepoRef, mirror: &PathBuf) -> Result<()> {
-    tracing::debug!("fetching {}", repo.canonical());
     let status = Command::new("git")
         .args(["fetch", "--all", "--prune", "-q"])
         .current_dir(mirror)

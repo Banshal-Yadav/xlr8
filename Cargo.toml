@@ -6,21 +6,17 @@ description = "GitHub in a box — instant local web viewer for repos, diffs and
 license = "MIT"
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
-tokio = { version = "1", features = ["full"] }
 axum = "0.8"
-gix = "0.70"
-imara-diff = "0.1"
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "io-util"] }
+gix = { version = "0.70", default-features = false, features = ["basic", "max-performance-safe"] }
+imara-diff = { version = "0.1", default-features = false }
+ureq = { version = "3", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
-dirs = "6"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-open = "5"
 
 [profile.release]
-lto = "thin"
+lto = "fat"
 codegen-units = 1
 strip = true
+panic = "abort"

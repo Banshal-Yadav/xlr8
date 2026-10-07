@@ -24,11 +24,15 @@
   .status.A { color:var(--addfg); } .status.D { color:var(--delfrg); } .status.M { color:#d29922; } .status.R { color:var(--accent); }
   .mono { color:var(--muted); font-size:12px; }
   .lines { overflow-x:auto; }
-  .ln { display:flex; white-space:pre; }
-  .ln .n { width:48px; flex:none; text-align:right; padding-right:8px; color:var(--muted); user-select:none; background:#0d111799; position:sticky; left:0; }
+  .ln { display:flex; white-space:pre; content-visibility:auto; contain-intrinsic-size:auto 21px; }
+  .ln .n, .ln .n2 { width:48px; flex:none; text-align:right; padding-right:8px; color:var(--muted); user-select:none; background:#0d111799; position:sticky; }
+  .ln .n { left:0; }
+  .ln .n2 { left:48px; border-right:1px solid var(--border); }
   .ln .t { padding-left:8px; }
   .ln.add { background:var(--add); } .ln.add .t { color:var(--addfg); }
   .ln.del { background:var(--del); } .ln.del .t { color:var(--delfrg); }
+  .hunk-h { background:#1c2129; color:var(--accent); padding:3px 10px; font-size:12px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); position:sticky; top:0; }
+  .gap { text-align:center; color:var(--muted); background:#21262d; padding:4px; font-size:12px; }
   .row { padding:8px 12px; border-bottom:1px solid var(--border); display:flex; gap:12px; }
   .row:last-child { border-bottom:none; }
   .row .sha { color:var(--accent); cursor:pointer; }
@@ -140,38 +144,76 @@ async function loadCommits() {
       <span class="muted" style="margin-left:auto">${escapeHtml(c.author)} · ${new Date(c.time*1000).toLocaleString()}</span>
     </div></div>`).join("");
   document.querySelectorAll(".sha").forEach(el => el.onclick = () => {
-    $("#base-ref").value = el.dataset.sha; // quick: set as base — full commit diff is v1.1
-    toast("set as base ref (commit diff via Compare tab is WIP)");
+    setRef("base-ref", el.dataset.sha + "^", el.textContent + "^");
+    setRef("head-ref", el.dataset.sha, el.textContent);
+    document.querySelector('nav button[data-tab="compare"]').click();
+    $("#diff-btn").click();
   });
 }
 $("#commits-ref").onchange = loadCommits;
+
+function setRef(selId, value, label) {
+  const sel = $("#" + selId);
+  if (![...sel.options].some(o => o.value === value)) {
+    const o = document.createElement("option");
+    o.value = value;
+    o.textContent = label;
+    sel.appendChild(o);
+  }
+  sel.value = value;
+}
 
 $("#diff-btn").onclick = async () => {
   const base = $("#base-ref").value, head = $("#head-ref").value;
   $("#diff-info").textContent = "computing…";
   const t0 = performance.now();
-  const s = await api(`/api/${repo}/diff?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
-  $("#diff-info").textContent = `${s.files.length} files  +${s.total_additions} −${s.total_deletions}  (${Math.round(performance.now()-t0)}ms)`;
-  $("#diff-file").innerHTML = "";
-  $("#diff-summary").innerHTML = s.files.map(f => `
-    <div class="card"><div class="card-h" data-path="${escapeAttr(f.path)}">
-      <span class="status ${f.status}">${f.status}</span>
-      <span>${escapeHtml(f.path)}</span>
-      ${f.old_path && f.old_path !== f.path ? `<span class="muted">← ${escapeHtml(f.old_path)}</span>` : ""}
-      <span class="stat"><span class="a">+${f.additions}</span> <span class="d">−${f.deletions}</span></span>
-    </div></div>`).join("");
-  document.querySelectorAll(".card-h[data-path]").forEach(el => el.onclick = () => openFile(base, head, el.dataset.path));
+  try {
+    const s = await api(`/api/${repo}/diff?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
+    $("#diff-info").textContent = `${s.files.length} files  +${s.total_additions} −${s.total_deletions}  (${Math.round(performance.now()-t0)}ms)`;
+    $("#diff-file").innerHTML = "";
+    $("#diff-summary").innerHTML = s.files.map(f => `
+      <div class="card"><div class="card-h" data-path="${escapeAttr(f.path)}" data-opath="${escapeAttr(f.old_path || "")}">
+        <span class="status ${f.status}">${f.status}</span>
+        <span>${escapeHtml(f.path)}</span>
+        ${f.old_path && f.old_path !== f.path ? `<span class="muted">← ${escapeHtml(f.old_path)}</span>` : ""}
+        <span class="stat">${f.binary ? '<span class="muted">binary</span>' : `<span class="a">+${f.additions}</span> <span class="d">−${f.deletions}</span>`}</span>
+      </div></div>`).join("");
+    document.querySelectorAll(".card-h[data-path]").forEach(el => el.onclick = () => openFile(base, head, el.dataset.path, el.dataset.opath));
+  } catch (e) {
+    $("#diff-info").textContent = "";
+    toast("diff failed: " + e.message);
+  }
 };
 
-async function openFile(base, head, path) {
-  const fd = await api(`/api/${repo}/file?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}&path=${encodeURIComponent(path)}`);
-  let ln = 0;
-  const rows = fd.lines.map(l => {
-    ln++;
-    return `<div class="ln ${l.kind === 'add' ? 'add' : l.kind === 'del' ? 'del' : ''}">
-      <span class="n">${ln}</span><span class="t">${escapeHtml(l.text) || " "}</span></div>`;
-  }).join("");
-  $("#diff-file").innerHTML = `<div class="card"><div class="card-h">${escapeHtml(path)} <span class="muted">${fd.lines.length} lines</span></div><div class="lines">${rows}</div></div>`;
+async function openFile(base, head, path, opath) {
+  let u = `/api/${repo}/file?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}&path=${encodeURIComponent(path)}`;
+  if (opath && opath !== path) u += `&old_path=${encodeURIComponent(opath)}`;
+  const fd = await api(u);
+  if (fd.binary) {
+    $("#diff-file").innerHTML = `<div class="card"><div class="card-h">${escapeHtml(path)} <span class="muted">binary file</span></div></div>`;
+    return;
+  }
+  let body = "";
+  let prev = null;
+  for (const h of fd.hunks) {
+    const gapOld = prev ? h.old_start - (prev.old_start + prev.old_count) : (h.old_count ? h.old_start - 1 : h.old_start);
+    const gapNew = prev ? h.new_start - (prev.new_start + prev.new_count) : (h.new_count ? h.new_start - 1 : h.new_start);
+    const gap = Math.max(gapOld, gapNew, 0);
+    if (gap > 0) body += `<div class="gap">⋯ ${gap} lines unchanged</div>`;
+    body += `<div class="hunk-h">@@ -${h.old_start},${h.old_count} +${h.new_start},${h.new_count} @@</div>`;
+    let o = h.old_start, n = h.new_start;
+    for (const l of h.lines) {
+      let oc = "", nc = "";
+      if (l.kind === "del") oc = o++;
+      else if (l.kind === "add") nc = n++;
+      else { oc = o++; nc = n++; }
+      body += `<div class="ln ${l.kind === "add" ? "add" : l.kind === "del" ? "del" : ""}">
+        <span class="n">${oc}</span><span class="n2">${nc}</span><span class="t">${escapeHtml(l.text) || " "}</span></div>`;
+    }
+    prev = h;
+  }
+  const total = fd.hunks.reduce((s, h) => s + h.lines.length, 0);
+  $("#diff-file").innerHTML = `<div class="card"><div class="card-h">${escapeHtml(path)} <span class="muted">${fd.hunks.length} hunks · ${total} lines</span></div><div class="lines">${body}</div></div>`;
 }
 
 async function loadPulls() {
@@ -189,7 +231,7 @@ async function loadPulls() {
   } catch (e) { $("#pulls-list").innerHTML = `<span class="muted">PR load failed: ${escapeHtml(String(e))} (set GITHUB_TOKEN if rate-limited)</span>`; }
 }
 
-const escapeHtml = (s) => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const escapeAttr = escapeHtml;
 
 refreshRepos().then(() => { if (repo) onRepoChange(); }).catch(e => toast(String(e)));

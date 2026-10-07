@@ -1,12 +1,78 @@
 use crate::{diff, mirror, AppState};
+use axum::body::{Body, Bytes};
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
-use axum::response::Html;
+use axum::http::{header, StatusCode};
+use axum::response::{Html, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::sync::{Mutex, OnceLock};
+
+/// Serialized JSON per (mirror, request). The mirror is immutable between
+/// pulls, so a repeat compare/file/commits/refs request is served straight
+/// from memory — no walk, no diff, no serde.
+const RESP_CAP: usize = 32 << 20;
+struct RespCache {
+    map: HashMap<String, Bytes>,
+    bytes: usize,
+}
+static RESP: OnceLock<Mutex<RespCache>> = OnceLock::new();
+
+fn resp_key(path: &std::path::Path, rest: &str) -> String {
+    let mut k = path.to_string_lossy().into_owned();
+    k.push('\0');
+    k.push_str(rest);
+    k
+}
+
+fn resp_get(key: &str) -> Option<Bytes> {
+    RESP.get()?.lock().ok()?.map.get(key).cloned()
+}
+
+fn resp_put(key: String, body: Vec<u8>) -> Bytes {
+    let bytes = Bytes::from(body);
+    let c = RESP.get_or_init(|| {
+        Mutex::new(RespCache {
+            map: HashMap::new(),
+            bytes: 0,
+        })
+    });
+    if bytes.len() > RESP_CAP {
+        return bytes;
+    }
+    let Ok(mut g) = c.lock() else {
+        return bytes;
+    };
+    if g.bytes + bytes.len() > RESP_CAP {
+        g.map.clear();
+        g.bytes = 0;
+    }
+    g.bytes += bytes.len();
+    g.map.insert(key, bytes.clone());
+    bytes
+}
+
+/// Called on sync: the mirror's objects moved, every cached body is stale.
+pub(crate) fn clear_resp_cache(path: &std::path::Path) {
+    let Some(c) = RESP.get() else {
+        return;
+    };
+    let Ok(mut g) = c.lock() else {
+        return;
+    };
+    let prefix = format!("{}\0", path.to_string_lossy());
+    g.map.retain(|k, _| !k.starts_with(&prefix));
+    g.bytes = g.map.values().map(|v| v.len()).sum();
+}
+
+fn json_body(bytes: Bytes) -> Response {
+    Response::builder()
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(bytes))
+        .unwrap_or_else(|_| Response::new(Body::empty()))
+}
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -25,21 +91,18 @@ async fn index() -> Html<&'static str> {
     Html(include_str!("../assets/index.html"))
 }
 
-async fn list_repos() -> Json<serde_json::Value> {
-    let mut repos = Vec::new();
-    let mirrors = mirror::cache_dir().join("mirrors");
-    if let Ok(rd) = std::fs::read_dir(&mirrors) {
-        for e in rd.flatten() {
-            let file = e.file_name().to_string_lossy().to_string();
-            if let Some(slug) = file.strip_suffix(".git") {
-                let parts: Vec<&str> = slug.splitn(2, '_').collect();
-                if parts.len() == 2 {
-                    repos.push(format!("{}/{}", parts[0], parts[1]));
-                }
-            }
-        }
-    }
-    Json(json!({ "repos": repos }))
+#[derive(Serialize)]
+struct ReposResp {
+    repos: Vec<String>,
+}
+
+async fn list_repos() -> Json<ReposResp> {
+    Json(ReposResp {
+        repos: mirror::cached_repos()
+            .iter()
+            .map(|r| r.canonical())
+            .collect(),
+    })
 }
 
 #[derive(Deserialize)]
@@ -47,26 +110,46 @@ struct SyncReq {
     repo: String,
 }
 
-async fn sync_repo(Json(req): Json<SyncReq>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let repo = mirror::RepoRef::parse(&req.repo).map_err(internal)?;
-    tokio::task::spawn_blocking(move || mirror::sync(&repo))
-        .await
-        .map_err(internal)?
-        .map_err(internal)?;
-    Ok(Json(json!({ "ok": true })))
+#[derive(Serialize)]
+struct SyncResp {
+    ok: bool,
 }
 
-async fn refs(Path((owner, repo)): Path<(String, String)>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+async fn sync_repo(Json(req): Json<SyncReq>) -> Result<Json<SyncResp>, (StatusCode, String)> {
+    let repo = mirror::RepoRef::parse(&req.repo).map_err(api_err)?;
+    let path = tokio::task::spawn_blocking(move || mirror::sync(&repo))
+        .await
+        .map_err(|e| api_err(e.into()))?
+        .map_err(api_err)?;
+    crate::repo::invalidate(&path);
+    Ok(Json(SyncResp { ok: true }))
+}
+
+#[derive(Serialize)]
+struct RefsResp {
+    refs: Vec<diff::RefInfo>,
+}
+
+async fn refs(
+    Path((owner, repo)): Path<(String, String)>,
+) -> Result<Response, (StatusCode, String)> {
     let r = mirror::RepoRef {
         owner,
         name: repo,
     };
     let path = mirror::mirror_path(&r);
-    let refs = tokio::task::spawn_blocking(move || diff::refs(&path))
-        .await
-        .map_err(internal)?
-        .map_err(internal)?;
-    Ok(Json(json!({ "refs": refs })))
+    let key = resp_key(&path, "refs");
+    if let Some(b) = resp_get(&key) {
+        return Ok(json_body(b));
+    }
+    let body = tokio::task::spawn_blocking(move || {
+        let refs = diff::refs(&path)?;
+        serde_json::to_vec(&RefsResp { refs }).map_err(anyhow::Error::from)
+    })
+    .await
+    .map_err(|e| api_err(e.into()))?
+    .map_err(api_err)?;
+    Ok(json_body(resp_put(key, body)))
 }
 
 #[derive(Deserialize)]
@@ -75,19 +158,34 @@ struct CommitsQuery {
     r#ref: Option<String>,
 }
 
+#[derive(Serialize)]
+struct CommitsResp {
+    commits: Vec<diff::CommitInfo>,
+}
+
 async fn commits(
     Path((owner, repo)): Path<(String, String)>,
     Query(q): Query<CommitsQuery>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+) -> Result<Response, (StatusCode, String)> {
     let r = mirror::RepoRef { owner, name: repo };
     let path = mirror::mirror_path(&r);
     let limit = q.limit.unwrap_or(50).min(500);
     let refspec = q.r#ref.clone();
-    let list = tokio::task::spawn_blocking(move || diff::commits(&path, limit, refspec.as_deref()))
-        .await
-        .map_err(internal)?
-        .map_err(internal)?;
-    Ok(Json(json!({ "commits": list })))
+    let key = resp_key(
+        &path,
+        &format!("commits\0{limit}\0{}", refspec.as_deref().unwrap_or("")),
+    );
+    if let Some(b) = resp_get(&key) {
+        return Ok(json_body(b));
+    }
+    let body = tokio::task::spawn_blocking(move || {
+        let list = diff::commits(&path, limit, refspec.as_deref())?;
+        serde_json::to_vec(&CommitsResp { commits: list }).map_err(anyhow::Error::from)
+    })
+    .await
+    .map_err(|e| api_err(e.into()))?
+    .map_err(api_err)?;
+    Ok(json_body(resp_put(key, body)))
 }
 
 #[derive(Deserialize)]
@@ -99,15 +197,22 @@ struct RangeQuery {
 async fn diff_summary(
     Path((owner, repo)): Path<(String, String)>,
     Query(q): Query<RangeQuery>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+) -> Result<Response, (StatusCode, String)> {
     let r = mirror::RepoRef { owner, name: repo };
     let path = mirror::mirror_path(&r);
+    let key = resp_key(&path, &format!("diff\0{}\0{}", q.base, q.head));
+    if let Some(b) = resp_get(&key) {
+        return Ok(json_body(b));
+    }
     let (base, head) = (q.base.clone(), q.head.clone());
-    let summary = tokio::task::spawn_blocking(move || diff::compare(&path, &base, &head))
-        .await
-        .map_err(internal)?
-        .map_err(internal)?;
-    Ok(Json(serde_json::to_value(summary).map_err(internal)?))
+    let body = tokio::task::spawn_blocking(move || {
+        let summary = diff::compare(&path, &base, &head)?;
+        serde_json::to_vec(&summary).map_err(anyhow::Error::from)
+    })
+    .await
+    .map_err(|e| api_err(e.into()))?
+    .map_err(api_err)?;
+    Ok(json_body(resp_put(key, body)))
 }
 
 #[derive(Deserialize)]
@@ -115,37 +220,72 @@ struct FileQuery {
     base: String,
     head: String,
     path: String,
+    old_path: Option<String>,
 }
 
 async fn file_diff(
     Path((owner, repo)): Path<(String, String)>,
     Query(q): Query<FileQuery>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+) -> Result<Response, (StatusCode, String)> {
     let r = mirror::RepoRef { owner, name: repo };
     let path = mirror::mirror_path(&r);
-    let (base, head, p) = (q.base.clone(), q.head.clone(), q.path.clone());
-    let fd = tokio::task::spawn_blocking(move || diff::file_diff(&path, &base, &head, &p))
-        .await
-        .map_err(internal)?
-        .map_err(internal)?;
-    Ok(Json(serde_json::to_value(fd).map_err(internal)?))
+    let key = resp_key(
+        &path,
+        &format!(
+            "file\0{}\0{}\0{}\0{}",
+            q.base,
+            q.head,
+            q.path,
+            q.old_path.as_deref().unwrap_or("")
+        ),
+    );
+    if let Some(b) = resp_get(&key) {
+        return Ok(json_body(b));
+    }
+    let (base, head, p, op) = (q.base.clone(), q.head.clone(), q.path.clone(), q.old_path);
+    let body = tokio::task::spawn_blocking(move || {
+        let fd = diff::file_diff(&path, &base, &head, &p, op.as_deref())?;
+        serde_json::to_vec(&fd).map_err(anyhow::Error::from)
+    })
+    .await
+    .map_err(|e| api_err(e.into()))?
+    .map_err(api_err)?;
+    Ok(json_body(resp_put(key, body)))
+}
+
+#[derive(Serialize)]
+struct PullsResp {
+    pulls: Vec<crate::github::PullRequest>,
 }
 
 async fn pulls(
     Path((owner, repo)): Path<(String, String)>,
     State(state): State<AppState>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let list = state.gh.pulls(&owner, &repo).await.map_err(internal)?;
-    Ok(Json(json!({ "pulls": list })))
+) -> Result<Json<PullsResp>, (StatusCode, String)> {
+    let list = tokio::task::spawn_blocking(move || state.gh.pulls(&owner, &repo))
+        .await
+        .map_err(|e| api_err(e.into()))?
+        .map_err(api_err)?;
+    Ok(Json(PullsResp { pulls: list }))
 }
 
-fn internal<E: std::fmt::Display>(e: E) -> (StatusCode, String) {
-    (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+fn api_err(e: anyhow::Error) -> (StatusCode, String) {
+    let status = if e.downcast_ref::<diff::NotFound>().is_some() {
+        StatusCode::NOT_FOUND
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    };
+    (status, e.to_string())
 }
 
-pub async fn serve(state: AppState, port: Option<u16>) -> anyhow::Result<std::net::SocketAddr> {
+pub async fn serve(state: AppState, port: Option<u16>) -> anyhow::Result<SocketAddr> {
+    use axum::serve::{Listener, ListenerExt};
     let addr = SocketAddr::from(([127, 0, 0, 1], port.unwrap_or(0)));
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await?
+        .tap_io(|s| {
+            let _ = s.set_nodelay(true);
+        });
     let local = listener.local_addr()?;
     tokio::spawn(async move {
         let _ = axum::serve(listener, router(state)).await;

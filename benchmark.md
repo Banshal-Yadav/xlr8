@@ -1,7 +1,8 @@
 # Benchmarks — xlr8
 
 Every number below was measured with `curl -w '%{time_total}'` against a
-`cargo build --release` binary serving on localhost. No estimates.
+`cargo build --release` binary serving on localhost, unless a row says
+otherwise. No estimates.
 
 ## Device & environment
 
@@ -15,143 +16,217 @@ Every number below was measured with `curl -w '%{time_total}'` against a
 
 **PRoot caveat:** every syscall is trapped by ptrace, so these numbers are a
 *pessimal floor*. On a normal Linux box or the Windows laptop — no PRoot, NVMe,
-higher clocks — expect substantially better. The 6-core 695 with no PRoot
-should land roughly 2-5× faster.
+higher clocks — expect substantially better.
+
+**Warm vs cold:** numbers are **warm** (mirror in page cache, blob cache
+filled) unless marked *cold*. Cold = first request after process start.
+True OS-cold (page cache evicted) could not be forced here (no root for
+`drop_caches`; `posix_fadvise DONTNEED` proved ineffective), so no OS-cold
+numbers are claimed. git baselines are likewise warm.
+
+Since the sub-ms pass (timeline row 14) there is a third state worth
+knowing: **cached** = the serialized JSON body is served from the response
+cache (repeat of a range already computed since the last sync). Phase
+timings (`walk/renames/stats`) are `DEBUG`-level now — launch with
+`RUST_LOG=debug` to see them; they are skipped by default (a stderr write
+in the worker lands on the response path).
 
 ## Test repos
 
 - **Synthetic stress** (`bench/gen_stress.sh`): 103 commits, 2002 files
-  (2000 × 40-line text files), tags `base`, `head`, `head2` (head2 adds a
-  20 000-line file, of which 40 lines differ from a plain copy). Installed
-  as mirror slug `stress/big`.
+  (2000 × 40-line text files), tags `base`, `head`, plus `head2` (adds
+  `giant.txt`, and `giant2.txt` differs from it in 40 lines). Installed as
+  mirror slug `stress/big`.
 - **Real-world**: `BurntSushi/ripgrep` (full mirror, real tags, 15 years of
-  history).
+  history); `libuv/libuv` (30 MB mirror, 12 years, header/tree restructure);
+  `tokio-rs/tokio` (63 MB mirror, 9 years, 867-file refactors).
+- All mirrors must be **packed** (`git -C <mirror> repack -adq`). With
+  loose objects on this device every blob read costs ~1-2 ms of PRoot FUSE
+  traffic — that alone inflated every engine ~10× (see timeline row 11).
 
-## Performance timeline (synthetic 2000-file compare)
+## Head-to-head: xlr8 vs git CLI (same device, packed mirror, warm)
 
-How the hot path evolved, in order — each row is a real measurement:
+xlr8's numbers **include the HTTP round-trip + JSON serialization**; git only
+computes. git = `git diff --numstat -M` (walk + renames + stats, single
+thread).
 
-| # | Stage | Change | 2000-file compare |
+| Range | Files | xlr8 (compute) | xlr8 (cached) | git CLI | speedup (compute) |
+|---|---|---|---|---|---|
+| stress `base..head` | 2000 | **78–109 ms** (typ. ~96) | 16–76 ms | 143 ms | **≈1.5×** |
+| ripgrep `0.1.0..15.2.0` | 252 | **54–90 ms** (typ. ~65; cold 147 ms) | 43 ms | 125 ms | **≈1.4–2.3×** |
+| ripgrep `14.1.1..15.1.0` | 91 | **32 / 39 ms** | 3–12 ms | 132 ms | **≈3.5–4×** |
+| libuv `v1.0.0..v1.53.0` | 495 | **90 ms** (cold-process 212 ms) | **1.5–8.4 ms** | 196–266 ms | **≈2.2×** |
+| libuv `v1.49.0..v1.53.0` | 194 | **37 ms** | **1.9–3.0 ms** | 183–231 ms | **≈4.9×** |
+| tokio `1.0.0..1.53.2` | 867 | **139 ms** (cold-process 252 ms) | **5.4–11.8 ms** | 214–219 ms | **≈1.6×** |
+| tokio `1.50.0..1.53.2` | 298 | **37 ms** | **1.4–15 ms** | 121–133 ms | **≈3.3×** |
+
+"cached" = response cache hit: the range was computed once since the last
+sync, the JSON body is served straight from memory — no walk, no diff, no
+serde. With HTTP keep-alive (what a browser does) cached hello hits
+**0.68–1.5 ms**; each standalone `curl` process adds ~1–3 ms of
+connection setup on this device.
+
+Real-repo phase breakdown (tokio long, server log, `RUST_LOG=debug`): walk
+5 ms, **renames 93–129 ms (501 candidates — the bottleneck)**, stats 32–45
+ms. Endpoint extras on real repos (compute path): file diff 4–10 ms,
+commits(n=50) 10–12 ms, refs first hit ~185 ms then cached (10 ms via
+standalone curl, ~2 ms keep-alive).
+
+Server-side compare time (log, `RUST_LOG=debug`, excludes HTTP+JSON):
+rg15y 51–70 ms, rg91 30 ms, stress 52–53 ms.
+
+Phase breakdown (warm, `RUST_LOG=debug`):
+
+| Range | walk | renames | stats |
 |---|---|---|---|
-| 1 | v0.1 scaffold | debug build, sequential loop, full text diff built per file just to count | **10.31 s** (cold: 19.1 s) |
-| 2 | allocation fix | count-only `line_stats` on `&str` slices, `mem::take` blob reads, no lossy `.to_string()` copies | **9.34 s** — proved allocations were *not* the bottleneck |
-| 3 | instrumented | revealed blob loading = **13.43 s** of the 13.46 s stats loop; pure `line_stats` = **124 ms**; tree walk = 1.46 s | (diagnosis) |
-| 4 | parallel + release | worker threads (≤8, own `gix::open` per worker, results re-sorted by original index) + `--release` | **≈3.0 s** warm (2.93–3.14 s), 7.4 s first hit |
-| 5 | correct diff engine | hand-rolled window-80 matcher **overcounted wildly on real code** (see below) → replaced with **imara-diff** (the engine gitoxide uses, git's histogram/myers ported) | **≈2.4 s** — faster *and* correct |
+| rg15y 252 files | ~2 ms | 36–58 ms | 6–9 ms |
+| rg91 91 files | 2.4 ms | 8 ms | 16 ms |
+| stress 2000 files | 8–9 ms | 0 (no candidates) | 38–40 ms |
 
-Reference points measured along the way:
+libgit2 reference (prior session, **loose-object fixture**, not re-run after
+the repack): stress 6.97 s, rg15y 104 ms — kept only as history; treat with
+the loose-object caveat.
 
-- `git diff --numstat base head` (C git, same mirror): **5.56 s**
-  → xlr8's gix implementation in release beats git CLI on this device.
-- Debug sequential blob loop alone: 13.43 s for 2000 files (~6 ms/blob —
-  PRoot syscall amplification, not CPU).
+## Final numbers — every endpoint (release, warm)
 
-### Correctness fixes the benchmark forced
+Compute = first request for that range (response cache miss). Cached =
+repeat. Both include HTTP + JSON.
+
+| Request | Size | Compute | Cached |
+|---|---|---|---|
+| rg compare `0.1.0..15.2.0` | 252 files, +72 442 / −21 356 | **106–121 ms** cold-proc, 54–90 warm | **43 ms** |
+| rg compare `14.1.1..15.1.0` | 91 files, +3 607 / −1 073 | **31 ms** | **3–12 ms** |
+| stress compare `base..head` | 2000 files, +4 000/−0 | **78–109 ms** | **16–76 ms** |
+| stress compare *cold process* | same | 319 ms (stats 215 ms — cache fill) | — |
+| file diff `crates/core/main.rs` | 483 lines | **43–56 ms** cold-proc | **1.3–2.7 ms** |
+| file diff rename target | `benchsuite/benchsuite` | — | **2.7 ms**, git-exact |
+| file diff giant add (`giant2.txt`) | 20 000 lines | 44–66 ms (pre-pass) | — |
+| file diff small | 40 lines | 4 ms (pre-pass) | — |
+| file diff libuv `src/unix/core.c` | mid-size, cross-range | 9 ms (pre-pass) | — |
+| commits?n=50 | 50 entries | **7.5 ms** | **1.7–12.6 ms** |
+| commits(n=50) tokio | 50 entries | **12 ms** (pre-pass) | **3.4–12.6 ms** |
+| refs (tokio, first hit) | all tags/branches | **187 ms** | **1.4–15.5 ms** |
+| refs (ripgrep) | all tags | 183 ms first | **4 ms** |
+| refs (stress) | 3 refs | 16 ms (pre-pass) | — |
+| hello diff `master^..master` | 1 file +1/−1 | **33 ms** cold-proc, 3.4–9 warm | **0.68–9 ms** (keep-alive: **0.68–1.5**) |
+| hello index `/` | 1 HTML file | — | **1.9–11 ms** |
+| libuv compare `v1.0.0..v1.53.0` | 495 files, +80 354 / −24 096 | **90 ms** (cold-proc 212) | **1.5–8.4 ms** |
+| libuv compare `v1.49.0..v1.53.0` | 194 files, +11 830 / −3 487 | **37 ms** | **1.9–3.0 ms** |
+| tokio compare `1.0.0..1.53.2` | 867 files, +127 896 / −24 244 | **139 ms** (cold-proc 252) | **5.4–11.8 ms** |
+| tokio compare `1.50.0..1.53.2` | 298 files, +11 505 / −2 097 | **37 ms** | **1.4–15 ms** |
+
+## Performance timeline — each row is a real measurement
+
+| # | Stage | Change | Result |
+|---|---|---|---|
+| 1 | v0.1 scaffold | debug build, sequential, full text diff per file just to count | stress **10.31 s** (cold 19.1 s) |
+| 2 | allocation fixes | count-only stats, `mem::take` blob reads | **9.34 s** — allocs were *not* the bottleneck |
+| 3 | instrumented | diagnosis | blob loading = 13.43 s of the 13.46 s stats loop; `line_stats` itself = 124 ms |
+| 4 | parallel + release | worker threads (≤8, own `gix::open`, results re-sorted) + `--release` | **≈3.0 s** warm |
+| 5 | correct diff engine | hand-rolled window-80 matcher overcounted 10-50× on real code → **imara-diff** | **≈2.4 s** — faster *and* correct |
+| 6 | correctness pass | tree-entry filter, tag peel, path 404, dep diet (clap/dirs → hand CLI; fat LTO; **5.1 MB binary**) | parity green |
+| 7 | custom rename detector | gix rewrites off/weak → own parallel detector: per-worker interner reuse, `min*2<max` ratio prune, binary-at-load, sequential first-pass resolve | rg15y renames **661 ms → 52–70 ms** |
+| 8 | stats work queue | atomic counter, `STAT_CHUNK=16`, n = available_parallelism().clamp(1,8) | stress stats **1.9 s → 185–236 ms** |
+| 9 | fixture repack | loose → packed mirror (the loose objects were the whole story) | stress **2.56 s → ≈259 ms** (walk 650→8.5 ms) |
+| 10 | hunk windows | `/file` returns GitHub-style ±3 context hunks, not the whole file | giant 20k add **251 ms → 44–66 ms** |
+| 11 | terminator-kept tokens + full walk + rename-aware file view | EOF-newline changes count; commits = full date-ordered walk (not first-parent); `old_path` for renamed files | correctness (below) |
+| 12 | blob cache | per-mirror memo of blob bytes (`repo.rs`, 64 MB cap, cleared on that mirror's pull) — warm requests skip pack lookup + inflate entirely | stress **253 → 96 ms** (stats 175→38 ms), rg15y **88 → 54 ms** |
+| 13 | real-repo validation + rename resolver fix | libuv exposed source-id-order greedy resolution pairing wrong files (`uv-linux.h → sysinfo-memory.c`) → global best-first assignment (sort by similarity desc, ties by index, greedy with emitted check) | libuv 15/16 of git's pairs exact (was several absurd pairings), tokio 29/29 exact; prior suites still exact |
+| 14 | sub-ms pass | typed `Json<T>` (axum's `Json(value)` double-serializes), `TCP_NODELAY` (axum sets none → Nagle), `Arc<[u8]>` blob cache (no clone per consumer), cached `available_parallelism`/`cache_dir`/CPU count, object cache on every gix handle, inline stats for ≤16 files, sequential rename scoring for ≤64 pairs, response cache (serialized JSON per mirror+request, cleared on sync), `DEBUG`-gated phase logs (default skips 2 stderr writes/request) | warm endpoints **1.4–12 ms** (hello keep-alive **0.68 ms**), compute path −5–15% (uvL 129→90, tkL 158→139); output **byte-identical** to pre-pass build |
+
+## Correctness ledger (bugs found and fixed by comparing to git)
 
 | Bug | Symptom | Fix |
 |---|---|---|
-| **greedy window-80 line matcher** (home-made) | plausible on synthetic lorem-ipsum, but on real code misaligned on duplicate/shifted lines: ripgrep `standard.rs` reported **+3333/−3188 vs git's +242/−97** (46 of 90 files wrong) | replaced with `imara-diff` (histogram/myers — same family as git) for both stats and line output |
-| gix tree diff yields **directory** Modification/Rewrite entries | 2200 files reported vs git's 2000 (phantom `mod_N/` rows) | `entry_mode.is_tree()` filter on **all** Change variants |
-| `rev_parse_single` returns a **tag object** for annotated tags | every ripgrep ref endpoint: `14.1.1 is not a commit` | `Object::peel_to_commit()` |
-| nonexistent path returned empty diff | `lines: []`, HTTP 200 | explicit error (`path not found in either ref`) |
+| hand-rolled window matcher | `standard.rs` +3333/−3188 vs git +242/−97 (46/90 files wrong) | imara-diff (Myers) everywhere |
+| gix tree diff yields **directory** entries | 2200 files vs git 2000 | `entry_mode.is_tree()` on all Change variants |
+| annotated tag objects | `14.1.1 is not a commit` | `peel_to_commit()` |
+| nonexistent path | empty diff, HTTP 200 | explicit not-found |
+| gix rewrite pass missed renames | 254 files vs git 252; `file` view showed a full add for renames | own rename detector (parity exact) + `old_path` param on `/file` |
+| EOF-newline blindness | `Hello World!` → `Hello World!\n` showed 0 changes | `lines_with_terminator` / `byte_lines_with_terminator` tokens in stats + hunks |
+| first-parent commit walk | merged commits missing (`git log` mismatch) | full date-ordered `BinaryHeap` walk over all parents |
+| `escapeHtml` skipped quotes | attribute injection via file names | escapes `&<>"'`, used at `data-path` |
+| `String::from_utf8_lossy(…).to_string()` | needless double alloc per blob | lossy once; stats now diff raw bytes (no UTF-8 pass at all) |
+| rename resolve in source-id order | libuv: `include/uv-linux.h` paired with `src/unix/sysinfo-memory.c` (absurd); several of git's pairs wrong | global best-first: collect `(dest, src, similarity)`, sort similarity desc, greedy-assign with emitted check (libuv 15/16 → all plausible, tokio 29/29 exact) |
 
-Verification after the swap (ripgrep `14.1.1..15.1.0`, per-file join against
-`git diff --numstat`):
+## Git-exactness (what matches, what doesn't)
 
-- file count **91 = 91** ✓, totals **+3607/−1073 vs git +3603/−1069**
-- **87 of 90** shared files byte-exact; 3 files off by exactly 1 line
-  (Myers-vs-xdiff hunk-edge case)
-- stress repo: **exact match** (2000 files, +4000/−0)
+**Exact:** file counts (252/91/2000 = git), rename pairing (all pairs found,
+same sources/targets), hunk counts, stress totals (2000, +4000/−0).
 
-## Head-to-head: xlr8 vs git CLI (C) vs libgit2 (C)
+**Accepted ± deltas vs `git diff --numstat -M`** (repeated-line alignment
+ambiguity between imara-Myers and git-xdiff; both edit scripts valid):
 
-Same device, same mirrors, same ranges. xlr8's numbers **include the HTTP
-round-trip + JSON serialization**; git/libgit2 only compute.
+| Range | xlr8 | git | delta | files off |
+|---|---|---|---|---|
+| rg `0.1.0..15.2.0` | +72 442 / −21 356 | +72 431 / −21 345 | +11 / +11 | `Cargo.lock` +10/+10, `tests/tests.rs` +1/+1 |
+| rg `14.1.1..15.1.0` | +3 607 / −1 073 | +3 603 / −1 069 | +4 / +4 | `core/search.rs`, `globset/{glob,lib}.rs`, `printer/hyperlink/mod.rs` — each +1/+1 |
 
-### Worst case — synthetic 2000-file compare (3 runs each)
+~0.01% of totals; do not chase further — the pairing of identical lines is
+genuinely ambiguous.
 
-| Implementation | Time | Result |
-|---|---|---|
-| **xlr8** (gix + imara-diff, 6 threads) | **2.34 / 2.45 / 2.52 s** | 2000 files, +4000/−0 ✓ |
-| git CLI `diff --numstat` (C, 1 thread) | 5.55 s | 2000 files, +4000/−0 |
-| libgit2 `git_diff_tree_to_tree` (C, 1 thread) | 6.97 s | 2000 files, +4000/−0 |
+**Real repos (same ± class):**
 
-→ **xlr8 is ≈2.3× faster than git CLI and ≈2.8× faster than libgit2** on this
-device (parallel blob stats vs single-threaded C).
+| Range | xlr8 | git | delta | files / renames |
+|---|---|---|---|---|
+| libuv `v1.0.0..v1.53.0` | +80 354 / −24 096 | +80 230 / −23 972 | +124 / +124 | 495/17 vs **496/16** |
+| libuv `v1.49.0..v1.53.0` | +11 830 / −3 487 | +11 822 / −3 479 | +8 / +8 | 194 = 194, pairs exact |
+| tokio `1.0.0..1.53.2` | +127 896 / −24 244 | +127 740 / −24 088 | +156 / +156 | 867 = 867, **29 = 29 pairs exact** |
+| tokio `1.50.0..1.53.2` | +11 505 / −2 097 | +11 496 / −2 088 | +9 / +9 | 298 = 298 |
 
-### Real world — ripgrep `0.1.0..15.2.0` (254 files, +73k/−22k)
+**libuv's ±1 file**: our detector pairs `samples/socks5-proxy/util.c →
+src/win/snprintf.c` (sim 0.509) which git never does, and swaps
+`atomicops-inl.h` to `no-proctitle.c` instead of git's `test-uname.c` (git
+scores: 50–51 vs `<50` for the other candidate; ours: ~0.502 for both). Both
+are **0.5-threshold boundary cases** where git's xdl byte accounting lands
+1–3 points below our line-exact common. git itself only pairs `util.c` at
+`-M48`, never at default `-M50`. Not chased further.
 
-| Implementation | Time | Files | Totals |
-|---|---|---|---|
-| **xlr8** | **99 ms** | 254 | +73 424 / −22 315 |
-| libgit2 | 104 ms | 254 | +73 390 / −22 304 |
-| git CLI | 190 ms | 252 | +72 431 / −21 345 |
+## Known gaps
 
-Notes:
-
-- At this scale all three are ~100-200 ms; xlr8's parallelism still wins.
-- git shows 252 files because it **pairs 2 rename**s (`benches/bench.rs →
-  crates/globset/benches/bench.rs`, `benchsuite → benchsuite/benchsuite`);
-  gix's rewrite pass missed those pairs, so we show D+A instead (the other
-  range's rename *was* paired correctly: 91 = 91 files).
-- libgit2 ran with its default (renames off), hence the same 254.
-- Remaining line deltas are the 3 off-by-1 hunk-edge cases above
-  (~0.01% of totals).
-
-## Final numbers (release, Poco X4 Pro / Snapdragon 695 / PRoot)
-
-### Real-world — ripgrep
-
-| Request | Size | Time |
-|---|---|---|
-| compare `0.1.0..15.2.0` (15 years) | 254 files, +73 424 / −22 315 | **99 ms** |
-| compare `14.1.1..15.1.0` | 91 files, +3 607 / −1 073 | **139 ms** |
-| file diff `crates/core/main.rs` | 485 lines (+2/−2) | **41 ms** |
-| commits?limit=50 | 50 entries | **21 ms** |
-
-### Synthetic stress (worst case)
-
-| Request | Size | Time |
-|---|---|---|
-| compare `base..head` | 2000 files, +4 000/−0 | **≈2.4 s** (cold 6.5 s) |
-| file diff giant `giant.txt` (added file) | 20 000 lines → 1.3 MB payload | **251 ms** |
-| file diff small file | 40 lines | **43 ms** |
-| refs | 3 refs | **38 ms** |
-
-### Small repo — octocat/Hello-World (early debug-build numbers, for scale)
-
-| Request | Time |
-|---|---|
-| compare | 36–68 ms |
-| file diff | 29–47 ms |
-
-## Known gaps (from these numbers)
-
-1. **2000-file compare ≈2.4 s** — tree walk + blob loads dominate;
-   next lever is caching stats for unchanged file pairs across requests.
-2. **File diffs return the whole file** (1.3 MB for a 20 k-line add) —
-   GitHub-style ±3-line hunk windows would cut both payload and diff compute.
-3. Cold first request pays pack-cache warm-up (6.5 s vs 2.4 s) — could warm
-   on startup.
-4. **Rename pairing not at git parity**: gix missed 2 of 2 rename pairs in
-   the 15-year range (shows D+A instead of R → +2 files, ~+1 k lines vs
-   git); 3 files differ by exactly 1 line from git's xdiff hunk edges.
-   Tuning `diff::Options` rewrites settings may close this.
+1. **Cold first request** pays the blob-cache fill (stress 319 ms vs 96 ms
+   warm) plus repo open + pack mmap (hello 33 ms cold-proc vs 3.4–9 warm).
+   Could pre-warm on startup; not done.
+2. ~~refs endpoint peels every ref on each hit~~ — fixed: ref list is
+   cached per mirror (row 14 precursor) and the response body is cached
+   too; first tokio hit 187 ms, then 1.4–15 ms.
+3. OS-cold numbers unavailable on this device (see environment note).
+4. clippy unavailable here (rustup network blocked, toolchain manifest
+   missing) — lint substitute = zero rustc warnings.
+5. **Response cache memory**: up to 32 MB of serialized bodies, cleared
+   wholesale for a mirror on sync (and for all mirrors if the cap is
+   hit). Bodies > 32 MB are never cached (compute every time).
+6. **Rename scoring** (93–129 ms of tkL compute) is unchanged — it is the
+   correctness-critical path; parallel already (6 workers). Only a result
+   cache sits in front of it.
 
 ## Reproduce
 
 ```bash
-# 1. generate + install the stress mirror
+# 1. generate + install the stress mirror (packed!)
 bash bench/gen_stress.sh /tmp/stress-src
 git clone --mirror /tmp/stress-src ~/.cache/xlr8/mirrors/stress_big.git
+git -C ~/.cache/xlr8/mirrors/stress_big.git repack -adq
 
-# 2. run
-cargo build --release
-./target/release/xlr8 octocat/Hello-World --no-open --port 7777
+# 2. run (RUST_LOG=debug only if you want walk/renames/stats phase logs)
+export PATH="$HOME/.cargo/bin:$PATH"
+CARGO_TARGET_DIR=/root/xlr8-target cargo build --release
+setsid /root/xlr8-target/release/xlr8 octocat/Hello-World --no-open --port 7777 &
 
-# 3. measure
+# 3. measure (first hit = compute, repeat = response cache)
 curl -w '%{time_total}\n' -o /dev/null \
   'http://127.0.0.1:7777/api/stress/big/diff?base=base&head=head'
 curl -w '%{time_total}\n' -o /dev/null \
   'http://127.0.0.1:7777/api/BurntSushi/ripgrep/diff?base=0.1.0&head=15.2.0'
+git -C ~/.cache/xlr8/mirrors/BurntSushi_ripgrep.git diff --numstat -M 0.1.0 15.2.0
+
+# 4. real repos (same pattern)
+git clone --mirror https://github.com/libuv/libuv ~/.cache/xlr8/mirrors/libuv_libuv.git
+git -C ~/.cache/xlr8/mirrors/libuv_libuv.git repack -adq
+setsid /root/xlr8-target/release/xlr8 libuv/libuv --no-open --port 7780 &
+curl -w '%{time_total}\n' -o /dev/null \
+  'http://127.0.0.1:7780/api/libuv/libuv/diff?base=v1.0.0&head=v1.53.0'
+git -C ~/.cache/xlr8/mirrors/libuv_libuv.git diff --numstat -M v1.0.0 v1.53.0
+# baseline note: git is run against the same packed mirror, warm, output → /dev/null;
+# xlr8 time includes HTTP + JSON — it still wins every row.
 ```

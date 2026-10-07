@@ -17,7 +17,6 @@ pub struct PullRequest {
 
 #[derive(Clone)]
 pub struct GitHubClient {
-    http: reqwest::Client,
     token: Option<String>,
 }
 
@@ -26,54 +25,45 @@ impl GitHubClient {
         let token = std::env::var("GITHUB_TOKEN")
             .or_else(|_| std::env::var("GH_TOKEN"))
             .ok();
-        Self {
-            http: reqwest::Client::new(),
-            token,
-        }
+        Self { token }
     }
 
-    async fn get(&self, url: &str) -> Result<serde_json::Value> {
-        let mut req = self.http.get(url).header("Accept", "application/vnd.github+json");
+    fn get(&self, url: &str) -> Result<serde_json::Value> {
+        let mut req = ureq::get(url)
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "xlr8");
         if let Some(t) = &self.token {
-            req = req.bearer_auth(t);
+            req = req.header("Authorization", format!("Bearer {t}"));
         }
-        let resp = req.send().await.context("github request failed")?;
+        let mut resp = req.call().context("github request failed")?;
         let status = resp.status();
-        if !status.is_success() {
+        if !(200..300).contains(&status.as_u16()) {
             anyhow::bail!("github API {status} for {url}");
         }
-        Ok(resp.json().await.context("github decode failed")?)
+        resp.body_mut()
+            .read_json()
+            .context("github decode failed")
     }
 
-    pub async fn pulls(&self, owner: &str, repo: &str) -> Result<Vec<PullRequest>> {
+    pub fn pulls(&self, owner: &str, repo: &str) -> Result<Vec<PullRequest>> {
         let url = format!(
             "https://api.github.com/repos/{owner}/{repo}/pulls?state=open&per_page=30&sort=updated"
         );
-        let items = self.get(&url).await?;
+        let items = self.get(&url)?;
         let arr = items.as_array().cloned().unwrap_or_default();
         let mut out = Vec::with_capacity(arr.len());
         for p in arr {
-            let number = p["number"].as_u64().unwrap_or(0);
-            let title = p["title"].as_str().unwrap_or("").to_string();
-            let state = p["state"].as_str().unwrap_or("").to_string();
-            let user = p["user"]["login"].as_str().unwrap_or("").to_string();
-            let head_ref = p["head"]["ref"].as_str().unwrap_or("").to_string();
-            let base_ref = p["base"]["ref"].as_str().unwrap_or("").to_string();
-            let head_sha = p["head"]["sha"].as_str().unwrap_or("").to_string();
-            let base_sha = p["base"]["sha"].as_str().unwrap_or("").to_string();
-            let html_url = p["html_url"].as_str().unwrap_or("").to_string();
-            let updated_at = p["updated_at"].as_str().unwrap_or("").to_string();
             out.push(PullRequest {
-                number,
-                title,
-                state,
-                user,
-                head_ref,
-                base_ref,
-                head_sha,
-                base_sha,
-                html_url,
-                updated_at,
+                number: p["number"].as_u64().unwrap_or(0),
+                title: p["title"].as_str().unwrap_or("").to_string(),
+                state: p["state"].as_str().unwrap_or("").to_string(),
+                user: p["user"]["login"].as_str().unwrap_or("").to_string(),
+                head_ref: p["head"]["ref"].as_str().unwrap_or("").to_string(),
+                base_ref: p["base"]["ref"].as_str().unwrap_or("").to_string(),
+                head_sha: p["head"]["sha"].as_str().unwrap_or("").to_string(),
+                base_sha: p["base"]["sha"].as_str().unwrap_or("").to_string(),
+                html_url: p["html_url"].as_str().unwrap_or("").to_string(),
+                updated_at: p["updated_at"].as_str().unwrap_or("").to_string(),
             });
         }
         Ok(out)

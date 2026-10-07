@@ -43,14 +43,14 @@ git add -A
 git commit -qm "big bang touches all 2000 files"
 git tag head
 
-# phase 4: giant 20k-line file with 40 changed lines
+# phase 4: giant pair — 20k-line file plus a copy with 40 changed lines
 for k in $(seq 1 20000); do echo "giant line $k abcdefghijklmnopqrstuvwxyz"; done > giant.txt
-git add -A && git commit -qm "giant 20k-line file"
 for k in $(seq 1 20000); do
   if [ $((k % 500)) -eq 0 ]; then echo "MODIFIED giant line $k"; else echo "giant line $k abcdefghijklmnopqrstuvwxyz"; fi
-done > giant.txt
-git add -A && git commit -qm "modify 40 lines of giant"
+done > giant2.txt
+git add -A && git commit -qm "giant 20k-line file with 40 changed lines"
 git tag head2
 
 echo "done: $(git rev-list --all --count) commits, $(git ls-tree -r HEAD --name-only | wc -l) files at HEAD"
-echo "install mirror: git clone --mirror '$D' ~/.cache/xlr8/mirrors/stress_big.git"
+# repack matters: loose objects on sdcard/PRoot cost ~20ms per tree read
+echo "install mirror: git clone --mirror '$D' ~/.cache/xlr8/mirrors/stress_big.git && git -C ~/.cache/xlr8/mirrors/stress_big.git repack -adq"
