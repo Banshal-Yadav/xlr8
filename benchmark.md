@@ -203,6 +203,31 @@ are **0.5-threshold boundary cases** where git's xdl byte accounting lands
    workers; stats caps at 16 — `XLR8_THREADS` overrides both). Only a
    result cache sits in front of it.
 
+## Competitive landscape (2026-10-08)
+
+No existing tool does xlr8's job (one command → mirror + GitHub-style
+two-ref compare/PR UI with cached ms diffs). Measured on this phone vs
+gitweb (ships with git, CGI, fresh perl+git per request, same mirrors):
+
+| Page | gitweb | xlr8 compute | xlr8 cached |
+|---|---|---|---|
+| libuv compare 495 files | 4,137–4,315 ms / 13.7 MB | 113 ms / 54 KB | 4.2–14 ms |
+| libuv compare 194 files | 1,398 ms / 3.1 MB | 43 ms | 1.9 ms |
+| ripgrep compare 252 files | 2,710 ms / 11.5 MB | 65 ms / 28.5 KB | 1.4–7.2 ms |
+| log / summary / file view | 716 / 784 / 670 ms | 18.6 / 159 / 10 ms | 4.5 / 6.8 / 3.4 ms |
+
+- gitweb has **no range-compare action** (commit-vs-parent only; forced via
+  `hp=`). xlr8: 37–54× faster, ~1000× cached, 254× smaller payload — and
+  beats raw `git diff` here (196–266 ms).
+- **cgit**: 7.7 ms commit page, 96 ms 16k-line diff (2026 desktop, Varnish
+  blog), ~107 req/s cached logs — single-commit diffs only, no compare.
+- **rgit** (Rust/axum/gitoxide/RocksDB): closest stack, but read-only bare
+  repo viewer; "97% faster" claim uncited. Live instance unreachable.
+- **Forgejo/Gitea**: PR diff 490 → 92 ms only after the 2026 paging rewrite;
+  `/pulls` 66 s on a 2.5k-repo instance; file views 8–40 s on huge repos.
+- **Fossil** ("GitHub in a box") is a different VCS; soft-serve/ungit/tig
+  are TUI/desktop — not comparable.
+
 ## Windows laptop — full re-run (2026-10-07)
 
 Every row above re-run on real hardware (no PRoot), same methodology:
