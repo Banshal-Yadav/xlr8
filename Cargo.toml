@@ -2,6 +2,7 @@
 name = "xlr8"
 version = "0.1.0"
 edition = "2021"
+authors = ["Banshal-Yadav"]
 description = "GitHub in a box — instant local web viewer for repos, diffs and PRs"
 license = "MIT"
 
