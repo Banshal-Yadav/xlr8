@@ -46,6 +46,9 @@
   .card-h:hover { background:var(--panel2); }
   .stat { margin-left:auto; font-size:12px; }
   .stat .a { color:var(--addfg); } .stat .d { color:var(--delfg); }
+  .cs { font-size:11px; font-variant-numeric:tabular-nums; }
+  .cs:empty { display:none; }
+  .cs .a { color:var(--addfg); } .cs .d { color:var(--delfg); }
   .status { width:18px; text-align:center; font-weight:700; font-family:var(--mono); }
   .status.A { color:var(--addfg); } .status.D { color:var(--delfg); } .status.M { color:var(--warn); } .status.R { color:var(--accent); }
   .mono { color:var(--muted); font-size:12px; font-family:var(--mono); }
@@ -191,7 +194,15 @@ async function refreshRepos() {
 
 function onRepoChange() {
   $("#repo-label").textContent = repo || "";
-  loadRefs().then(() => { loadCommits(); });
+  // drop everything belonging to the previous repo so no stale data shows
+  vclose($("#diff-summary")); $("#diff-summary").innerHTML = "";
+  $("#diff-info").textContent = "";
+  $("#pulls-list").innerHTML = '<span class="muted">loading…</span>';
+  loadRefs().then(() => {
+    loadCommits();
+    const pullsTab = document.querySelector('nav button[data-tab="pulls"]');
+    if (pullsTab && pullsTab.classList.contains("active")) loadPulls();
+  });
 }
 
 $("#repo-select").onchange = (e) => { repo = e.target.value; onRepoChange(); };
@@ -199,7 +210,7 @@ $("#sync-btn").onclick = async () => {
   if (!repo) return;
   toast("syncing…");
   fetch("/api/sync", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ repo }) })
-    .then(r => r.ok ? toast("synced") : r.text().then(t => toast("error: " + t)))
+    .then(r => r.ok ? (toast("synced"), onRepoChange()) : r.text().then(t => toast("error: " + t)))
     .catch(e => toast("error: " + e));
 };
 
@@ -221,14 +232,18 @@ async function loadRefs() {
   $("#head-ref").value = $("#base-ref").value;
 }
 
+let commitsTok = 0;
 async function loadCommits() {
+  const tok = ++commitsTok;
   const ref = $("#commits-ref").value;
   const { commits } = await api(`/api/${repo}/commits?limit=50&ref=${encodeURIComponent(ref)}`);
+  if (tok !== commitsTok) return;
   $("#commits-info").textContent = commits.length + " commits";
   $("#commits-list").innerHTML = commits.map(c => `
-    <div class="card"><div class="row">
+    <div class="card"><div class="row" data-cid="${c.id}">
       <span class="sha" data-sha="${c.id}">${c.short_id}</span>
       <span>${escapeHtml(c.summary)}</span>
+      <span class="badge cs"></span>
       <span class="muted" style="margin-left:auto">${escapeHtml(c.author)} · ${new Date(c.time*1000).toLocaleString()}</span>
     </div></div>`).join("");
   document.querySelectorAll(".sha").forEach(el => el.onclick = () => {
@@ -237,6 +252,17 @@ async function loadCommits() {
     document.querySelector('nav button[data-tab="compare"]').click();
     $("#diff-btn").click();
   });
+  // +/− per commit: separate cached request so this first paint stays ~20 ms;
+  // numbers pop in when ready (never blocks the list)
+  api(`/api/${repo}/commits?limit=50&ref=${encodeURIComponent(ref)}&stats=1`).then(({ commits: ws }) => {
+    if (tok !== commitsTok) return;
+    const m = new Map(ws.map(c => [c.id, c]));
+    document.querySelectorAll("#commits-list .row[data-cid]").forEach(el => {
+      const c = m.get(el.dataset.cid);
+      if (c) el.querySelector(".cs").innerHTML =
+        `<span class="a">+${c.additions}</span> <span class="d">−${c.deletions}</span>`;
+    });
+  }).catch(() => {});
 }
 $("#commits-ref").onchange = loadCommits;
 

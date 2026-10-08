@@ -227,6 +227,9 @@ async fn refs(
 struct CommitsQuery {
     limit: Option<usize>,
     r#ref: Option<String>,
+    /// `stats=1` fills +/− per commit (second cached pass; list without it
+    /// stays a pure commit walk). String, not bool — axum rejects `1` as bool.
+    stats: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -242,15 +245,19 @@ async fn commits(
     let path = mirror::mirror_path(&r);
     let limit = q.limit.unwrap_or(50).min(500);
     let refspec = q.r#ref.clone();
+    let want_stats = q.stats.as_deref() == Some("1");
     let key = resp_key(
         &path,
-        &format!("commits\0{limit}\0{}", refspec.as_deref().unwrap_or("")),
+        &format!(
+            "commits\0{limit}\0{}\0{want_stats}",
+            refspec.as_deref().unwrap_or("")
+        ),
     );
     if let Some(b) = resp_get(&key) {
         return Ok(json_body(b));
     }
     let body = tokio::task::spawn_blocking(move || {
-        let list = diff::commits(&path, limit, refspec.as_deref())?;
+        let list = diff::commits(&path, limit, refspec.as_deref(), want_stats)?;
         serde_json::to_vec(&CommitsResp { commits: list }).map_err(anyhow::Error::from)
     })
     .await

@@ -119,10 +119,46 @@ pub fn compare(mirror: &PathBuf, base: &str, head: &str) -> Result<DiffSummary> 
     crate::rewrite::detect(&tsr, mirror, &mut changes)?;
     let t_rename = t_rename.elapsed();
 
-    // fine-grained work queue: uneven core speeds don't stall the wall clock;
-    // tiny diffs run inline — thread spawn would cost more than the stats
-    const STAT_CHUNK: usize = 16;
     let t_stats = std::time::Instant::now();
+    let collected = fill_stats(mirror, &tsr, changes)?;
+
+    let mut files = Vec::with_capacity(collected.len());
+    let mut total_additions = 0u32;
+    let mut total_deletions = 0u32;
+    for (_, stat) in collected {
+        total_additions += stat.additions;
+        total_deletions += stat.deletions;
+        files.push(stat);
+    }
+    crate::debug!(
+        "compare total {:?} (walk {:?}, renames {:?}, stats {:?}) for {} files",
+        t0.elapsed(),
+        t_walk,
+        t_rename,
+        t_stats.elapsed(),
+        files.len()
+    );
+
+    Ok(DiffSummary {
+        base: base.to_string(),
+        head: head.to_string(),
+        files,
+        total_additions,
+        total_deletions,
+    })
+}
+
+/// Fine-grained work queue shared by compare() and per-commit stats: uneven
+/// core speeds don't stall the wall clock; tiny diffs run inline (thread spawn
+/// would cost more than the stats themselves). Returns stats keyed by the
+/// caller's tuple index — commits pass their commit index, compare passes
+/// the change position.
+fn fill_stats(
+    mirror: &std::path::PathBuf,
+    tsr: &std::sync::Arc<gix::ThreadSafeRepository>,
+    changes: Vec<(usize, Change)>,
+) -> Result<Vec<(usize, FileStat)>> {
+    const STAT_CHUNK: usize = 16;
     let mut collected: Vec<(usize, FileStat)> = Vec::new();
     if changes.len() <= STAT_CHUNK {
         if !changes.is_empty() {
@@ -159,31 +195,7 @@ pub fn compare(mirror: &PathBuf, base: &str, head: &str) -> Result<DiffSummary> 
         }
     }
     collected.sort_by_key(|(i, _)| *i);
-
-    let mut files = Vec::with_capacity(collected.len());
-    let mut total_additions = 0u32;
-    let mut total_deletions = 0u32;
-    for (_, stat) in collected {
-        total_additions += stat.additions;
-        total_deletions += stat.deletions;
-        files.push(stat);
-    }
-    crate::debug!(
-        "compare total {:?} (walk {:?}, renames {:?}, stats {:?}) for {} files",
-        t0.elapsed(),
-        t_walk,
-        t_rename,
-        t_stats.elapsed(),
-        files.len()
-    );
-
-    Ok(DiffSummary {
-        base: base.to_string(),
-        head: head.to_string(),
-        files,
-        total_additions,
-        total_deletions,
-    })
+    Ok(collected)
 }
 
 fn stat_chunk(
@@ -602,9 +614,20 @@ pub struct CommitInfo {
     pub summary: String,
     pub author: String,
     pub time: i64,
+    /// 0 unless requested with `stats=1` (second, cached pass — the list
+    /// itself never waits on diff computation)
+    #[serde(default)]
+    pub additions: u32,
+    #[serde(default)]
+    pub deletions: u32,
 }
 
-pub fn commits(mirror: &PathBuf, limit: usize, refspec: Option<&str>) -> Result<Vec<CommitInfo>> {
+pub fn commits(
+    mirror: &PathBuf,
+    limit: usize,
+    refspec: Option<&str>,
+    want_stats: bool,
+) -> Result<Vec<CommitInfo>> {
     let tsr = crate::repo::get(mirror)?;
     let repo = crate::repo::handle(&tsr);
     let spec = refspec.unwrap_or("HEAD");
@@ -619,6 +642,8 @@ pub fn commits(mirror: &PathBuf, limit: usize, refspec: Option<&str>) -> Result<
     heap.push((root.time().map(|t| t.seconds).unwrap_or(0), root_id));
 
     let mut out = Vec::new();
+    let mut ids: Vec<gix::ObjectId> = Vec::new();
+    let mut parents: Vec<Option<gix::ObjectId>> = Vec::new();
     while let Some((_, id)) = heap.pop() {
         if out.len() >= limit {
             break;
@@ -637,12 +662,17 @@ pub fn commits(mirror: &PathBuf, limit: usize, refspec: Option<&str>) -> Result<
             .map(|a| String::from_utf8_lossy(a.name.as_bytes()).to_string())
             .unwrap_or_default();
         let time = commit.time().map(|t| t.seconds).unwrap_or(0);
+        let p0 = commit.parent_ids().next().map(|p| p.detach());
+        ids.push(id);
+        parents.push(p0);
         out.push(CommitInfo {
             short_id: full[..8.min(full.len())].to_string(),
             id: full,
             summary: summary.lines().next().unwrap_or("").to_string(),
             author,
             time,
+            additions: 0,
+            deletions: 0,
         });
         for pid in commit.parent_ids() {
             let pid = pid.detach();
@@ -653,6 +683,43 @@ pub fn commits(mirror: &PathBuf, limit: usize, refspec: Option<&str>) -> Result<
                     .context("parent is not a commit")?;
                 heap.push((parent.time().map(|t| t.seconds).unwrap_or(0), pid));
             }
+        }
+    }
+
+    // stats=1 second pass: per-commit +/−, all commits flattened into one
+    // parallel fill_stats batch; merge commits diff vs their first parent
+    // (GitHub-style). Not computed in the plain list call — that path stays
+    // a ~20 ms walk.
+    if want_stats && !out.is_empty() {
+        let mut all: Vec<(usize, Change)> = Vec::new();
+        for (i, id) in ids.iter().enumerate() {
+            let head = repo.find_object(*id)?.try_into_commit()?;
+            let head_tree = head.tree()?;
+            let parent_tree = match parents[i] {
+                Some(pid) => Some(repo.find_object(pid)?.try_into_commit()?.tree()?),
+                None => None, // root commit: diff vs the empty tree
+            };
+            let mut ch: Vec<(usize, Change)> = repo
+                .diff_tree_to_tree(
+                    parent_tree.as_ref(),
+                    Some(&head_tree),
+                    gix::diff::Options::default(),
+                )?
+                .into_iter()
+                .enumerate()
+                .collect();
+            crate::rewrite::detect(&tsr, mirror, &mut ch)?;
+            all.extend(ch.into_iter().map(|(_, c)| (i, c)));
+        }
+        let collected = fill_stats(mirror, &tsr, all)?;
+        let mut acc: Vec<(u32, u32)> = vec![(0, 0); out.len()];
+        for (i, stat) in collected {
+            acc[i].0 += stat.additions;
+            acc[i].1 += stat.deletions;
+        }
+        for (i, info) in out.iter_mut().enumerate() {
+            info.additions = acc[i].0;
+            info.deletions = acc[i].1;
         }
     }
     Ok(out)
