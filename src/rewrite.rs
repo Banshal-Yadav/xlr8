@@ -48,14 +48,25 @@ fn load(
     Some(data)
 }
 
+fn dir_of(path: &[u8]) -> &[u8] {
+    match path.iter().rposition(|&b| b == b'/') {
+        Some(p) => &path[..p],
+        None => b"",
+    }
+}
+
 /// Score every (dest, src) pair for one slice of dests; one thread's worth of
 /// work. Loads blobs up front (cache fills on first load), interns each src
-/// once, skips binaries and sub-50% size pairs.
+/// once, skips binaries and sub-50% size pairs. When the full cross product
+/// exceeds RENAME_LIMIT, `same_dir_only` restricts pairs to one directory —
+/// git's own windowing fallback for oversized rename detection.
 fn score_part(
     mirror: &std::path::Path,
     tsr: &Arc<gix::ThreadSafeRepository>,
     part: Vec<(usize, ObjectId, gix::object::tree::EntryMode)>,
     srcs: &[(usize, ObjectId, gix::object::tree::EntryMode)],
+    dirs: &[gix::bstr::BString],
+    same_dir_only: bool,
 ) -> Vec<(usize, usize, f32)> {
     let repo = super::repo::handle(tsr);
 
@@ -94,6 +105,9 @@ fn score_part(
         input.update_before(imara_diff::sources::byte_lines_with_terminator(dbytes));
         for (si, sid, smode) in srcs.iter() {
             if !compatible(*smode, *dmode) {
+                continue;
+            }
+            if same_dir_only && dirs[*si] != dirs[*di] {
                 continue;
             }
             let Some((sbytes, sbin)) = blobs.get(sid) else {
@@ -211,10 +225,14 @@ pub fn detect(
         .map(|(i, it)| (i, it.id, it.mode))
         .collect();
 
-    // same limit gate as git/gix: skip similarity when permutations exceed renameLimit
-    if !dests.is_empty() && !srcs.is_empty() && srcs.len() * dests.len() <= RENAME_LIMIT {
+    // dir-windowed fallback: over the renameLimit git scores only same-directory
+    // pairs (its diffcore-rename windows) instead of skipping detection entirely
+    let n_cross = srcs.len() * dests.len();
+    let same_dir_only = n_cross > RENAME_LIMIT;
+    if !dests.is_empty() && !srcs.is_empty() {
         let srcs = Arc::new(srcs);
-        let n_pairs = srcs.len() * dests.len();
+        let dirs: Arc<Vec<gix::bstr::BString>> =
+            Arc::new(items.iter().map(|it| dir_of(&it.path).into()).collect());
         // rename scoring caps at 8: A/B on 8c/16t — 16 threads regressed
         // 60→76 ms (memory-bound blob loads, SMT contention), while stats
         // fill wants every thread (stress 88→54 ms). Split caps.
@@ -222,8 +240,8 @@ pub fn detect(
 
         let mut fuzzy: Vec<(usize, usize, f32)> = Vec::new();
         // thread spawn costs more than scoring a handful of pairs
-        if n_threads <= 1 || n_pairs <= 64 {
-            fuzzy.extend(score_part(mirror, tsr, dests, &srcs));
+        if n_threads <= 1 || n_cross <= 64 {
+            fuzzy.extend(score_part(mirror, tsr, dests, &srcs, &dirs, same_dir_only));
         } else {
             let chunk = dests.len().div_ceil(n_threads).max(1);
             let mut handles = Vec::with_capacity(n_threads);
@@ -236,9 +254,10 @@ pub fn detect(
                 }
                 let tsr = tsr.clone();
                 let srcs = srcs.clone();
+                let dirs = dirs.clone();
                 let mirror = mirror.to_path_buf();
                 handles.push(std::thread::spawn(move || {
-                    score_part(&mirror, &tsr, part, &srcs)
+                    score_part(&mirror, &tsr, part, &srcs, &dirs, same_dir_only)
                 }));
             }
             for h in handles {
