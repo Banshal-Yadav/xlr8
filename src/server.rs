@@ -15,6 +15,16 @@ use std::time::Instant;
 
 static REQ: AtomicU64 = AtomicU64::new(0);
 static START: OnceLock<Instant> = OnceLock::new();
+/// epoch second of the last successful sync (boot counts); 0 = unknown
+static SYNCED: AtomicU64 = AtomicU64::new(0);
+
+pub(crate) fn note_sync() {
+    let s = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    SYNCED.store(s.max(1), Ordering::Relaxed);
+}
 
 /// Serialized JSON per (mirror, request). The mirror is immutable between
 /// pulls, so a repeat compare/file/commits/refs request is served straight
@@ -112,6 +122,8 @@ struct StatsResp {
     reqs: u64,
     cache_bytes: usize,
     cache_entries: usize,
+    /// seconds since the last successful sync; 0 = unknown
+    synced_s: u64,
 }
 
 /// Reads /proc only when hit (frontend throttles to ≥2 s) — no hot path
@@ -150,6 +162,15 @@ async fn stats() -> Json<StatsResp> {
         .get()
         .and_then(|c| c.lock().ok().map(|g| (g.bytes, g.map.len())))
         .unwrap_or((0, 0));
+    let synced_s = SYNCED.load(Ordering::Relaxed);
+    let synced_s = if synced_s == 0 {
+        0
+    } else {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs().saturating_sub(synced_s))
+            .unwrap_or(0)
+    };
     Json(StatsResp {
         rss,
         cpu_ms,
@@ -157,6 +178,7 @@ async fn stats() -> Json<StatsResp> {
         reqs: REQ.load(Ordering::Relaxed),
         cache_bytes,
         cache_entries,
+        synced_s,
     })
 }
 
@@ -195,6 +217,7 @@ async fn sync_repo(Json(req): Json<SyncReq>) -> Result<Json<SyncResp>, (StatusCo
         .map_err(|e| api_err(e.into()))?
         .map_err(api_err)?;
     crate::repo::invalidate(&path);
+    note_sync();
     Ok(Json(SyncResp { ok: true }))
 }
 

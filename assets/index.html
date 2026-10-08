@@ -7,12 +7,30 @@
 <style>
   :root { --bg:#0d1117; --panel:#151a21; --panel2:#1c2129; --border:#2d333b; --fg:#e6edf3; --muted:#8b949e;
           --add:#2ea04329; --del:#f8514929; --addfg:#3fb950; --delfg:#f85149; --accent:#58a6ff;
-          --warn:#d29922; --ok:#238636; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+          --warn:#d29922; --ok:#238636; --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg); padding-bottom:34px;
          font:14px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
   ::selection { background:#388bfd44; }
   :focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration:0s !important; animation-duration:0s !important; }
+  }
+  .badge, .cs, .stat, #perf, .fgut, .ln .n, .ln .n2,
+  #commits-info, #diff-info, #search-info, .fig { font-variant-numeric:tabular-nums; }
+  .fig { position:relative; border:1px dashed var(--border); margin:0 0 14px; padding:16px 12px 10px;
+         background:var(--panel); font-family:var(--mono); font-size:12px; }
+  .fig::before { content:attr(data-title); position:absolute; top:-8px; left:14px; padding:0 8px;
+                 background:var(--bg); color:var(--muted); font-size:11px; letter-spacing:.6px; }
+  .fig::after { content:"+"; position:absolute; right:-5px; bottom:-10px; color:var(--muted);
+                background:var(--bg); padding:0 3px; font-size:12px; line-height:1; opacity:.7; }
+  .fig .fig { margin-bottom:10px; }
+  .fig .fig::before, .fig .fig::after { background:var(--panel); }
+  .fig .toolbar { margin-bottom:10px; }
+  .recede { opacity:.4; }
+  .a { color:var(--addfg); } .d { color:var(--delfg); }
+  .logo { font-family:var(--mono); font-size:10px; line-height:11px; white-space:pre;
+          color:var(--accent); letter-spacing:0; }
   header { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:10px 20px;
            background:var(--panel); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5; }
   header h1 { font-size:15px; margin:0 8px 0 0; color:var(--accent); letter-spacing:.4px; font-weight:700; }
@@ -97,7 +115,9 @@
 </head>
 <body>
 <header>
-  <h1>xlr8</h1>
+  <h1><span class="logo" aria-label="xlr8">█   █ █    █▀▀▄ ▄▀▄
+ █ █  █    █  █ █▀█
+█   █ █▀▀▀ ▀  ▀ ▀▄▀</span></h1>
   <nav>
     <button data-tab="commits" class="active">Commits</button>
     <button data-tab="compare">Compare</button>
@@ -107,13 +127,15 @@
   <span id="repo-label" class="muted"></span>
 </header>
 <main>
-  <div class="toolbar" id="repo-bar" style="display:none">
+  <div class="toolbar fig" id="repo-bar" data-title="[ REPO ]" style="display:none">
     <span class="muted">repo:</span>
     <select id="repo-select"></select>
     <button id="sync-btn">sync</button>
+    <span class="muted" id="sync-age"></span>
   </div>
 
   <section id="tab-commits">
+    <div class="fig" data-title="[ COMMITS ]">
     <div class="toolbar">
       <select id="commits-ref"></select>
       <select id="commits-size" title="commits per page">
@@ -126,23 +148,30 @@
       <span class="muted" id="commits-info"></span>
       <button id="commits-next" title="next page">›</button>
     </div>
+    <div id="commits-fig"></div>
     <div id="commits-list"></div>
+    </div>
   </section>
 
   <section id="tab-compare" style="display:none">
+    <div class="fig" data-title="[ COMPARE ]">
     <div class="toolbar">
       <select id="base-ref"></select><span class="muted">...</span><select id="head-ref"></select>
       <button id="diff-btn">diff</button>
       <span class="muted" id="diff-info"></span>
     </div>
     <div id="diff-summary"></div>
+    </div>
   </section>
 
   <section id="tab-pulls" style="display:none">
+    <div class="fig" data-title="[ PULLS ]">
     <div id="pulls-list"><span class="muted">loading…</span></div>
+    </div>
   </section>
 
   <section id="tab-search" style="display:none">
+    <div class="fig" data-title="[ SEARCH ]">
     <div class="toolbar">
       <select id="search-ref"></select>
       <input id="search-q" type="search" placeholder="words in paths · ext:rs · grep:text · -negate" style="flex:1;min-width:140px" />
@@ -150,10 +179,12 @@
     </div>
     <div id="search-view" style="display:none"></div>
     <div id="search-results"></div>
+    </div>
   </section>
 </main>
 <div id="toast"></div>
-<div id="perf" title="fetch = last request round trip (client-measured) · ram/cpu/up/cache/started from /api/stats every 2 s (paused when tab hidden)">
+<div id="perf" title="spark = last 40 request round trips (client-measured) · ram/cpu/up/cache/synced from /api/stats every 2 s (paused when tab hidden)">
+  <span id="perf-spark" class="muted"></span>
   <span id="perf-lat">—</span>
   <span id="perf-stats" class="muted"></span>
 </div>
@@ -170,14 +201,20 @@ const fmtDur = (s) => s < 120 ? s + "s" : s < 7200 ? Math.floor(s / 60) + "m" : 
 // live bottom bar: stats polled every 2 s (only ~1 ms of server work, paused
 // when the tab is hidden), uptime ticks locally every 1 s — no server cost
 let lastS = null, fetchedAt = 0;
+const meter = (frac, n = 12) => {
+  const f = Math.round(Math.min(1, Math.max(0, frac)) * n);
+  return "=".repeat(f) + "-".repeat(n - f);
+};
 function renderStats() {
   if (!lastS) return;
-  const up = lastS.uptime_s + Math.floor((Date.now() - fetchedAt) / 1000);
-  const started = new Date(fetchedAt - lastS.uptime_s * 1000);
+  const drift = Math.floor((Date.now() - fetchedAt) / 1000);
+  const up = lastS.uptime_s + drift;
+  const synced = lastS.synced_s ? lastS.synced_s + drift : 0;
   $("#perf-stats").textContent =
     "ram " + fmtBytes(lastS.rss) + " · cpu " + (lastS.cpu_ms / 1000).toFixed(1) + "s" +
-    " · up " + fmtDur(up) + " · cache " + fmtBytes(lastS.cache_bytes) +
-    " · started " + started.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    " · up " + fmtDur(up) + " · cache [" + meter(lastS.cache_bytes / (32 << 20)) + "] " +
+    fmtBytes(lastS.cache_bytes) + "/32m";
+  $("#sync-age").textContent = synced ? "synced " + fmtDur(synced) + " ago" : "";
 }
 function refreshStats() {
   if (document.hidden) return;
@@ -188,7 +225,13 @@ function refreshStats() {
     renderStats();
   }).catch(() => {});
 }
+// sparkline of the last 40 round trips — block glyphs, max-scaled, no server
+const LAT = [], SPARK_CH = "▁▂▃▄▅▆▇█";
 const mark = (ms) => {
+  LAT.push(ms);
+  if (LAT.length > 40) LAT.shift();
+  const mx = Math.max(...LAT, 1);
+  $("#perf-spark").textContent = LAT.map(v => SPARK_CH[Math.min(7, Math.floor(v / mx * 7.999))]).join("");
   $("#perf-lat").textContent = (ms >= 100 ? Math.round(ms) : ms.toFixed(1)) + "ms";
   refreshStats();
 };
@@ -281,6 +324,37 @@ function renderCommitsInfo() {
   $("#commits-prev").disabled = commitsPage <= 1;
   $("#commits-next").disabled = pages ? commitsPage >= pages : commitsLoaded < limit;
 }
+// activity strip + author rank from the loaded page — pure client math on
+// data we already fetched, one small DOM subtree
+function renderCommitsFig(commits) {
+  const el = $("#commits-fig");
+  if (!commits.length) { el.innerHTML = ""; return; }
+  const byDay = new Map();
+  for (const c of commits) {
+    const k = Math.floor(c.time / 86400);
+    byDay.set(k, (byDay.get(k) || 0) + 1);
+  }
+  const ks = [...byDay.keys()].sort((a, b) => a - b);
+  const hi = ks[ks.length - 1];
+  const span = Math.min(hi - ks[0] + 1, 60);
+  const mx = Math.max(...byDay.values());
+  let strip = "";
+  for (let k = hi - span + 1; k <= hi; k++) {
+    const v = byDay.get(k) || 0;
+    strip += v ? SPARK_CH[Math.min(7, Math.floor(v / mx * 7.999))] : " ";
+  }
+  const iso = (k) => new Date(k * 86400 * 1000).toISOString().slice(0, 10);
+  const authors = new Map();
+  for (const c of commits) authors.set(c.author, (authors.get(c.author) || 0) + 1);
+  const top = [...authors].sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const amx = top.length ? top[0][1] : 1;
+  el.innerHTML = `<div class="fig" data-title="[ ACTIVITY ]">${strip}
+    <div class="muted" style="margin-top:5px">${iso(hi - span + 1)} → ${iso(hi)} · ${commits.length} commits</div>
+    ${top.map(([n, v], i) => `<div style="display:flex;gap:10px;margin-top:${i ? 2 : 8}px"${i ? ' class="recede"' : ""}>
+      <span style="min-width:110px;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(n)}</span>
+      <span>${"█".repeat(Math.max(1, Math.round(v / amx * 12)))}</span><span class="muted">${v}</span></div>`).join("")}
+  </div>`;
+}
 async function loadCommits() {
   const tok = ++commitsTok;
   const ref = $("#commits-ref").value;
@@ -291,6 +365,7 @@ async function loadCommits() {
   if (tok !== commitsTok) return;
   commitsLoaded = commits.length;
   renderCommitsInfo();
+  renderCommitsFig(commits);
   $("#commits-list").innerHTML = commits.map(c => `
     <div class="card"><div class="row" data-cid="${c.id}">
       <span class="sha" data-sha="${c.id}">${c.short_id}</span>
@@ -368,9 +443,10 @@ async function openBlob(path) {
   try {
     const b = await api(`/api/${repo}/blob?ref=${encodeURIComponent(searchRef)}&path=${encodeURIComponent(path)}`);
     const body = b.binary ? '<span class="muted">binary file</span>' : fileView(b.text, searchTerms);
-    el.innerHTML = `<div class="toolbar" style="margin:0;padding:8px 12px;border-bottom:1px solid var(--border)">
-        <b style="font-family:var(--mono);font-size:13px">${escapeHtml(path)}</b>
-        <span class="muted">${b.truncated ? "truncated" : ""}</span></div>${body}`;
+    el.innerHTML = `<div class="fig" data-title="[ FILE ]" style="margin-top:0">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+          <b style="font-size:13px">${escapeHtml(path)}</b>
+          <span class="muted">${b.truncated ? "truncated" : ""}</span></div>${body}</div>`;
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) { el.innerHTML = `<span class="muted">${escapeHtml(String(e))}</span>`; }
 }
@@ -465,7 +541,14 @@ $("#diff-btn").onclick = async () => {
     $("#diff-info").textContent = `${s.files.length} files  +${s.total_additions} −${s.total_deletions}  (${Math.round(performance.now()-t0)}ms)`;
     diffBase = base; diffHead = head;
     vclose($("#diff-summary"));
-    $("#diff-summary").innerHTML = s.files.map(f => `
+    const tot = s.total_additions + s.total_deletions || 1;
+    const share = Math.round(s.total_additions / tot * 12);
+    $("#diff-summary").innerHTML =
+      `<div class="fig" data-title="[ CHANGES ]">${escapeHtml(base)} → ${escapeHtml(head)}<br>
+        <span class="a">+${s.total_additions}</span> <span class="d">−${s.total_deletions}</span>
+        · ${s.files.length} files · add [${"=".repeat(share)}${"-".repeat(12 - share)}]<br>
+        <span class="muted">computed ${Math.round(performance.now() - t0)} ms · click a file to expand</span></div>` +
+      s.files.map(f => `
       <div class="card"><div class="card-h" data-path="${escapeAttr(f.path)}" data-opath="${escapeAttr(f.old_path || "")}">
         <span class="status ${f.status}">${f.status}</span>
         <span>${escapeHtml(f.path)}</span>
@@ -479,8 +562,8 @@ $("#diff-btn").onclick = async () => {
 };
 
 // file diffs expand inside their own card (one delegated listener instead of
-// per-card handlers; content-visibility on .ln keeps big hunks off the layout
-// until scrolled to — no jump to page bottom like the old footer container)
+// per-card handlers; the windowed .vlines slice keeps off-screen rows out of
+// the DOM — no jump to page bottom like the old footer container)
 let diffBase = "", diffHead = "";
 $("#diff-summary").addEventListener("click", (e) => {
   const h = e.target.closest(".card-h[data-path]");

@@ -45,6 +45,7 @@ async fn main() -> Result<()> {
         match handle.await? {
             Ok(p) => {
                 crate::info!("ready: {}", p.display());
+                server::note_sync();
                 opened.push(p);
             }
             Err(e) => crate::warn!("sync failed for {}: {e}", r.canonical()),
