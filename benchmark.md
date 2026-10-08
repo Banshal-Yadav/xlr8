@@ -149,6 +149,8 @@ repeat. Both include HTTP + JSON.
 | `escapeHtml` skipped quotes | attribute injection via file names | escapes `&<>"'`, used at `data-path` |
 | `String::from_utf8_lossy(…).to_string()` | needless double alloc per blob | lossy once; stats now diff raw bytes (no UTF-8 pass at all) |
 | rename resolve in source-id order | libuv: `include/uv-linux.h` paired with `src/unix/sysinfo-memory.c` (absurd); several of git's pairs wrong | global best-first: collect `(dest, src, similarity)`, sort similarity desc, greedy-assign with emitted check (libuv 15/16 → all plausible, tokio 29/29 exact) |
+| gitlink submodule treated as blob | git.git `v1.0.0..v2.50.0` / `v2.0.0..v2.50.0` → 500 `object 855827c… not found` | `entry_mode.is_commit()` → (1,0)/(0,1)/(1,1) stats + synthesized one-line `Subproject commit` hunk (`/file` 7 ms, exact git patch format) |
+| all-or-nothing renameLimit gate | git.git `v2.48.0..v2.50.0`: 752/903 renames — 151 `.txt→.adoc` pairs never scored (48.6k permutations > 32 767 → fuzzy disabled entirely) | over-limit → same-directory windowing (git's own diffcore fallback): **1795 = 1795 files, 903 = 903 pairs exact** |
 
 ## Git-exactness (what matches, what doesn't)
 
@@ -164,11 +166,15 @@ ambiguity between imara-Myers and git-xdiff; both edit scripts valid):
 | rg `14.1.1..15.1.0` | +3 607 / −1 073 | +3 603 / −1 069 | +4 / +4 | `core/search.rs`, `globset/{glob,lib}.rs`, `printer/hyperlink/mod.rs` — each +1/+1 |
 
 ~0.01% of totals; do not chase further — the pairing of identical lines is
-genuinely ambiguous.
+genuinely ambiguous. Proof: on one git.git file, git-default says 216/164,
+git-`--minimal` 215/163, GNU diff 217/165, imara 218/166 — four tools, four
+valid scripts; only an xdiff port could match byte-for-byte.
 
 **Real repos (same ± class):**
 
 | Range | xlr8 | git | delta | files / renames |
+|---|---|---|---|---|
+| git `v2.48.0..v2.50.0` | +71 795 / −32 313 | +71 735 / −32 253 | +60 / +60 (0.06%) | 1795 = 1795, **903 = 903 pairs exact** (dir-windowed mode) |
 |---|---|---|---|---|
 | libuv `v1.0.0..v1.53.0` | +80 354 / −24 096 | +80 230 / −23 972 | +124 / +124 | 495/17 vs **496/16** |
 | libuv `v1.49.0..v1.53.0` | +11 830 / −3 487 | +11 822 / −3 479 | +8 / +8 | 194 = 194, pairs exact |
@@ -182,6 +188,12 @@ scores: 50–51 vs `<50` for the other candidate; ours: ~0.502 for both). Both
 are **0.5-threshold boundary cases** where git's xdl byte accounting lands
 1–3 points below our line-exact common. git itself only pairs `util.c` at
 `-M48`, never at default `-M50`. Not chased further.
+
+**Over-limit ranges** (git.git `v1.0.0..v2.50.0`, `v2.0.0..v2.50.0`): git
+gives up on fuzzy renames entirely (`renameLimit … at least 4506/2514`
+warning, renames = add+delete) — we window by directory instead, so output
+shows 9/444 renames vs git's 0/234 (exact-id only). More coverage than git
+default, deltas vs its numstat are that coverage, not miscounts.
 
 ## Known gaps
 
@@ -227,6 +239,36 @@ gitweb (ships with git, CGI, fresh perl+git per request, same mirrors):
   `/pulls` 66 s on a 2.5k-repo instance; file views 8–40 s on huge repos.
 - **Fossil** ("GitHub in a box") is a different VCS; soft-serve/ungit/tig
   are TUI/desktop — not comparable.
+
+## Big-repo validation — git.git (606 MB mirror, 2026-10-08)
+
+Full endpoint battery on the real git repository after a cold process
+restart (empty caches); warm = repeat of the same request:
+
+| Request | Cold | Warm | Notes |
+|---|---|---|---|
+| refs (all, peeled) | 219 ms | **3.9 ms** | thousands of refs/tags |
+| commits ×50 / ×500 | 19 / 18 ms | **2.1–2.2 ms** | full date-ordered walk, 87 KB |
+| commits @tag / @root | 4–6 ms | 1.5–3 ms | bad ref → 404 |
+| diff `v2.48.0..v2.50.0` (1795 f, 903 R) | 369 ms | **2.5 ms** | files + renames exact vs git |
+| diff `v2.0.0..v2.50.0` (4420 f, 444 R) | 2.07 s | **3.2 ms** | 498 KB payload |
+| diff `v1.0.0..v2.50.0` (4920 f) | 1.62 s | **3.0 ms** | +1 536 606 / −59 852, 540 KB |
+| file: normal / rename+old_path / gitlink / binary | 4–8 ms | 2–14 ms | all correct hunks |
+| file: missing / unchanged / directory | — | — | 404 / 200-empty / 200-empty |
+| diff empty (`base==head`) / bad base | 22 ms | 3.3 ms | files=0 / **404** |
+| UI shell `/` | 51 ms | **4.4 ms** | 15.6 KB |
+| pulls (GitHub API) | 1.8 s | 0.57 s | network-bound |
+
+- **16× concurrent** warm `v2.0.0..v2.50.0` diffs: **121 ms wall**
+  (17–80 ms per request); after 64 requests: RSS **237 MB**, response
+  cache 1.5 MB / 16 entries, zero errors in logs.
+- **vs git CLI** same device/mirror: medium range **369 ms vs 1 023 ms
+  (2.8×)**; huge range 2.07 s vs 1.75–2.70 s — par on wall clock only
+  because git *skips* rename detection there (`renameLimit` warning) while
+  xlr8 resolves 444 pairs; git never caches, xlr8 repeats are ~3 ms.
+- Caught two real bugs this repo is the first to expose: submodule gitlink
+  500s (ledger above) and the over-limit rename gate — both fixed before
+  these numbers.
 
 ## Windows laptop — full re-run (2026-10-07)
 
