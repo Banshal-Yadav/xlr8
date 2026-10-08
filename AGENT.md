@@ -75,7 +75,7 @@ cargo build --release
 ```
 Mirrors cache to `%LOCALAPPDATA%\xlr8\mirrors` automatically.
 
-### Android PRoot (this device) — quirks are real, don't fight them
+### Build quirks (Android/Termux/PRoot environment)
 
 - **`/mnt/sdcard` is noexec** → always build with:
   ```bash
@@ -95,7 +95,7 @@ Mirrors cache to `%LOCALAPPDATA%\xlr8\mirrors` automatically.
 - Release-only perf numbers; debug is 3-4× slower.
 
 **Full numbers and the perf history live in `benchmark.md`.** Headline
-(warm, PRoot, vs `git diff --numstat -M` same device): stress 2000 files
+(warm, vs `git diff --numstat -M`): stress 2000 files
 **~96 ms vs git 143 ms**, ripgrep 15-year range **~65 ms vs 125 ms**,
 rg91 **~35 ms vs 132 ms**; real repos: libuv 495 files **~90 ms vs ~230 ms**,
 libuv short **~37 ms vs ~200 ms**, tokio 867 files **~139 ms vs ~217 ms**,
@@ -140,7 +140,7 @@ hello **0.68 ms**).
   die with the handle (that's why we own the blob cache instead).
 - Commit listing must walk **all parents** in date order (BinaryHeap), not
   first-parent — merged commits were disappearing vs `git log`.
-- **Loose objects on this device are ~10× slower** (PRoot FUSE): after
+- **Loose objects on FUSE filesystems are ~10× slower**: after
   generating fixtures, always `git repack -adq` the mirror.
 - **Sub-ms pass gotchas** (row 14 in benchmark.md):
   - axum `Json(value)` **double-serializes** (`to_value` builds a DOM, then

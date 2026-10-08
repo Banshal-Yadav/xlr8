@@ -4,25 +4,16 @@ Every number below was measured with `curl -w '%{time_total}'` against a
 `cargo build --release` binary serving on localhost, unless a row says
 otherwise. No estimates.
 
-## Device & environment
+## Environment
 
-| | |
-|---|---|
-| Phone | **Poco X4 Pro 5G** |
-| SoC | **Snapdragon 695** (6 cores: 2× Kryo 660 @2.2 GHz + 4× @1.7 GHz) |
-| OS layer | Android → Termux → **Ubuntu PRoot container** (aarch64) |
-| Storage | f2fs (`/mnt/sdcard` is **noexec**, target dir on internal storage) |
-| Network | flaky; IPv6 broken (IPv4 pinned in `/etc/hosts`) |
-
-**PRoot caveat:** every syscall is trapped by ptrace, so these numbers are a
-*pessimal floor*. On a normal Linux box or the Windows laptop — no PRoot, NVMe,
-higher clocks — expect substantially better.
+Primary numbers measured on a low-end ARM device (Android/Termux/PRoot,
+aarch64, f2fs storage). PRoot traps every syscall via ptrace, so these are a
+*pessimal floor*. Laptop re-run (Windows, x86_64, NVMe) shows substantially
+better numbers — see "Windows laptop" section below.
 
 **Warm vs cold:** numbers are **warm** (mirror in page cache, blob cache
 filled) unless marked *cold*. Cold = first request after process start.
-True OS-cold (page cache evicted) could not be forced here (no root for
-`drop_caches`; `posix_fadvise DONTNEED` proved ineffective), so no OS-cold
-numbers are claimed. git baselines are likewise warm.
+git baselines are likewise warm.
 
 Since the sub-ms pass (timeline row 14) there is a third state worth
 knowing: **cached** = the serialized JSON body is served from the response
@@ -41,7 +32,7 @@ in the worker lands on the response path).
   history); `libuv/libuv` (30 MB mirror, 12 years, header/tree restructure);
   `tokio-rs/tokio` (63 MB mirror, 9 years, 867-file refactors).
 - All mirrors must be **packed** (`git -C <mirror> repack -adq`). With
-  loose objects on this device every blob read costs ~1-2 ms of PRoot FUSE
+  loose objects on FUSE filesystems every blob read costs ~1-2 ms of FUSE
   traffic — that alone inflated every engine ~10× (see timeline row 11).
 
 ## Head-to-head: xlr8 vs git CLI (same device, packed mirror, warm)
@@ -64,7 +55,7 @@ thread).
 sync, the JSON body is served straight from memory — no walk, no diff, no
 serde. With HTTP keep-alive (what a browser does) cached hello hits
 **0.68–1.5 ms**; each standalone `curl` process adds ~1–3 ms of
-connection setup on this device.
+connection setup overhead.
 
 Real-repo phase breakdown (tokio long, server log, `RUST_LOG=debug`): walk
 5 ms, **renames 93–129 ms (501 candidates — the bottleneck)**, stats 32–45
@@ -204,13 +195,13 @@ default, deltas vs its numstat are that coverage, not miscounts.
 2. ~~refs endpoint peels every ref on each hit~~ — fixed: ref list is
    cached per mirror (row 14 precursor) and the response body is cached
    too; first tokio hit 187 ms, then 1.4–15 ms.
-3. OS-cold numbers unavailable on this device (see environment note).
+3. OS-cold numbers unavailable (no root for `drop_caches`).
 4. clippy unavailable here (rustup network blocked, toolchain manifest
    missing) — lint substitute = zero rustc warnings.
 5. **Response cache memory**: up to 32 MB of serialized bodies, cleared
    wholesale for a mirror on sync (and for all mirrors if the cap is
    hit). Bodies > 32 MB are never cached (compute every time).
-6. **Rename scoring** (93–129 ms of tkL phone compute, 60 ms laptop) is
+6. **Rename scoring** (93–129 ms ARM compute, 60 ms laptop) is
    unchanged — it is the correctness-critical path. Parallel (capped at 8
    workers; stats caps at 16 — `XLR8_THREADS` overrides both). Only a
    result cache sits in front of it.
@@ -218,7 +209,7 @@ default, deltas vs its numstat are that coverage, not miscounts.
 ## Competitive landscape (2026-10-08)
 
 No existing tool does xlr8's job (one command → mirror + GitHub-style
-two-ref compare/PR UI with cached ms diffs). Measured on this phone vs
+two-ref compare/PR UI with cached ms diffs). Measured vs
 gitweb (ships with git, CGI, fresh perl+git per request, same mirrors):
 
 | Page | gitweb | xlr8 compute | xlr8 cached |
@@ -248,7 +239,7 @@ whole-disk search daemon (p50 1.3 ms name search over 7.7M files, MIT):
 flat per-ref path index with a u64 char-mask per path (one AND rejects
 non-candidates before any string work), subsequence scoring with
 consecutive/prefix/whole-name bonuses, and a size-capped, time-budgeted
-content grep. git.git master (45k files, phone):
+content grep. git.git master (45k files):
 
 | Query | Time |
 |---|---|
@@ -310,7 +301,7 @@ start = compute (blob cache empty → stats includes the cache fill).
 | Storage | **Kingston NVMe SSD** (OM8SEP4512Q, 512 GB) |
 | OS | Windows 11 (build 26200) |
 | Toolchain | git 2.49.0.windows.1, cargo 1.98.0, `cargo build --release` |
-| vs phone | no ptrace/PRoot tax, real syscalls, NVMe, higher clocks |
+| vs ARM baseline | no ptrace/PRoot tax, real syscalls, NVMe, higher clocks |
 
 ### Head-to-head: xlr8 vs git CLI (same device, packed mirror, warm)
 
@@ -370,12 +361,12 @@ Post-fix values; pre-fix in parens where changed.
 | tokio 298 files | 3.4 ms | 0.9 ms | 6.4 ms | 11 ms |
 
 Rename scoring still the bottleneck on big ranges (tokio: 60 ms of 79 ms) —
-but **≈1.6–2× faster than the phone** (93–129 ms). Small ranges skip the
+but **≈1.6–2× faster than the ARM baseline** (93–129 ms). Small ranges skip the
 parallel path entirely (≤64 pairs → sequential, sub-ms).
 
 ### Other endpoints (cold-proc → cached)
 
-| Request | Laptop | Phone |
+| Request | Laptop | ARM baseline |
 |---|---|---|
 | refs tokio (first hit) | **24 ms** → 1.0 ms | 187 ms → 1.4–15 ms |
 | commits?n=50 (rg) | 2.3 ms → 1.0 ms | 7.5–12 ms → 1.7–12.6 ms |
@@ -387,13 +378,13 @@ parallel path entirely (≤64 pairs → sequential, sub-ms).
 
 ### Correctness
 
-Output **identical to the phone run** on every range (file counts and
+Output **identical to the ARM run** on every range (file counts and
 totals match the git-exact numbers documented above): rg 252/+72 442/−21 356,
 rg91 91/+3 607/−1 073, libuv 495/+80 354/−24 096, tokio 867/+127 896/−24 244,
 stress 2000/+4 000/−0. Cross-device, byte-level parity — the ± deltas vs git
 are the documented imara-vs-xdiff ambiguity, unchanged.
 
-### Headline deltas (laptop vs phone)
+### Headline deltas (laptop vs ARM)
 
 - Cached responses: **0.7–1.1 ms** vs 1.5–15 ms
 - tokio long compute: **81 ms** vs 139 ms
@@ -417,7 +408,7 @@ curl.exe -w '%{time_total}' -o NUL 'http://127.0.0.1:7777/api/stress/big/diff?ba
 git -C "$env:LOCALAPPDATA\xlr8\mirrors\stress_big.git" diff --numstat -M base head
 ```
 
-## Reproduce (phone)
+## Reproduce
 
 ```bash
 # 1. generate + install the stress mirror (packed!)
