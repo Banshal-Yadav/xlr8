@@ -240,6 +240,27 @@ gitweb (ships with git, CGI, fresh perl+git per request, same mirrors):
 - **Fossil** ("GitHub in a box") is a different VCS; soft-serve/ungit/tig
   are TUI/desktop — not comparable.
 
+### Search feature — inspired by fsearch
+
+The Search tab takes its ideas (not code) from
+[fsearch](https://github.com/noahdunnagan/fsearch), a Rust macOS
+whole-disk search daemon (p50 1.3 ms name search over 7.7M files, MIT):
+flat per-ref path index with a u64 char-mask per path (one AND rejects
+non-candidates before any string work), subsequence scoring with
+consecutive/prefix/whole-name bonuses, and a size-capped, time-budgeted
+content grep. git.git master (45k files, phone):
+
+| Query | Time |
+|---|---|
+| path `clone.c` warm (index + response cached) | 1.5 ms |
+| path `clone.c` first ever (incl. index build) | 139 ms |
+| `grep:GIT_VERSION builtin` (path-narrowed) | 34 ms |
+| `grep:GIT_VERSION` full-tree scan | 536 ms (budget 1.2 s) |
+| blob view `builtin/clone.c` | 3.3 ms |
+
+Not taken: fsearch's trigram content index (its ~9 ms grep-everything) —
+the remaining upgrade if instant full-content search is ever needed.
+
 ## Big-repo validation — git.git (606 MB mirror, 2026-10-08)
 
 Full endpoint battery on the real git repository after a cold process

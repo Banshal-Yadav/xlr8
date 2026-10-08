@@ -31,6 +31,9 @@
   select { background:var(--bg); color:var(--fg); border:1px solid var(--border); border-radius:6px;
            padding:5px 8px; font:inherit; font-size:13px; transition:border-color .12s; }
   select:hover { border-color:var(--muted); }
+  input[type="search"] { background:var(--bg); color:var(--fg); border:1px solid var(--border); border-radius:6px;
+           padding:5px 9px; font:inherit; font-size:13px; transition:border-color .12s; }
+  input[type="search"]:focus { border-color:var(--accent); outline:none; }
   .toolbar { display:flex; gap:8px; margin-bottom:14px; align-items:center; flex-wrap:wrap; }
   .toolbar button { background:var(--panel2); color:var(--fg); border:1px solid var(--border);
                     border-radius:6px; padding:5px 14px; cursor:pointer; font:inherit; font-size:13px;
@@ -49,6 +52,12 @@
   .cs { font-size:11px; font-variant-numeric:tabular-nums; }
   .cs:empty { display:none; }
   .cs .a { color:var(--addfg); } .cs .d { color:var(--delfg); }
+  .fview { font-family:var(--mono); font-size:12px; padding:6px 0; }
+  .frow { display:flex; gap:10px; padding:0 12px; line-height:20px; }
+  .fgut { min-width:40px; text-align:right; color:var(--muted); user-select:none; flex-shrink:0; }
+  .ftxt { flex:1; white-space:pre-wrap; word-break:break-all; }
+  .fsep { opacity:.55; }
+  mark { background:rgba(240,180,50,.28); color:inherit; border-radius:2px; }
   .status { width:18px; text-align:center; font-weight:700; font-family:var(--mono); }
   .status.A { color:var(--addfg); } .status.D { color:var(--delfg); } .status.M { color:var(--warn); } .status.R { color:var(--accent); }
   .mono { color:var(--muted); font-size:12px; font-family:var(--mono); }
@@ -92,6 +101,7 @@
   <nav>
     <button data-tab="commits" class="active">Commits</button>
     <button data-tab="compare">Compare</button>
+    <button data-tab="search">Search</button>
     <button data-tab="pulls">Pulls</button>
   </nav>
   <span id="repo-label" class="muted"></span>
@@ -106,7 +116,15 @@
   <section id="tab-commits">
     <div class="toolbar">
       <select id="commits-ref"></select>
+      <select id="commits-size" title="commits per page">
+        <option>25</option>
+        <option selected>50</option>
+        <option>100</option>
+        <option>200</option>
+      </select>
+      <button id="commits-prev" title="previous page">‹</button>
       <span class="muted" id="commits-info"></span>
+      <button id="commits-next" title="next page">›</button>
     </div>
     <div id="commits-list"></div>
   </section>
@@ -122,6 +140,16 @@
 
   <section id="tab-pulls" style="display:none">
     <div id="pulls-list"><span class="muted">loading…</span></div>
+  </section>
+
+  <section id="tab-search" style="display:none">
+    <div class="toolbar">
+      <select id="search-ref"></select>
+      <input id="search-q" type="search" placeholder="words in paths · ext:rs · grep:text · -negate" style="flex:1;min-width:140px" />
+      <span class="muted" id="search-info"></span>
+    </div>
+    <div id="search-view" style="display:none"></div>
+    <div id="search-results"></div>
   </section>
 </main>
 <div id="toast"></div>
@@ -178,8 +206,10 @@ const api = async (path) => {
 // tabs
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
-  ["commits","compare","pulls"].forEach(t => $("#tab-" + t).style.display = t === b.dataset.tab ? "" : "none");
+  document.querySelectorAll("main > section").forEach(s =>
+    s.style.display = s.id === "tab-" + b.dataset.tab ? "" : "none");
   if (b.dataset.tab === "pulls") loadPulls();
+  if (b.dataset.tab === "search") $("#search-q").focus();
 });
 
 async function refreshRepos() {
@@ -198,8 +228,14 @@ function onRepoChange() {
   vclose($("#diff-summary")); $("#diff-summary").innerHTML = "";
   $("#diff-info").textContent = "";
   $("#pulls-list").innerHTML = '<span class="muted">loading…</span>';
+  commitsPage = 1;
+  commitTotal = null;
+  $("#search-results").innerHTML = "";
+  $("#search-view").style.display = "none";
+  $("#search-info").textContent = "";
   loadRefs().then(() => {
     loadCommits();
+    if ($("#search-q").value.trim()) doSearch();
     const pullsTab = document.querySelector('nav button[data-tab="pulls"]');
     if (pullsTab && pullsTab.classList.contains("active")) loadPulls();
   });
@@ -221,7 +257,7 @@ async function loadRefs() {
   const pref = ["main", "master"];
   const rank = (n) => { const i = pref.indexOf(n); return i < 0 ? pref.length : i; };
   refs.sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
-  for (const id of ["commits-ref","base-ref","head-ref"]) {
+  for (const id of ["commits-ref","base-ref","head-ref","search-ref"]) {
     const sel = $("#" + id); sel.innerHTML = "";
     refs.forEach(r => { const o = document.createElement("option"); o.value = r.name; o.textContent = r.name; sel.appendChild(o); });
   }
@@ -233,12 +269,28 @@ async function loadRefs() {
 }
 
 let commitsTok = 0;
+let commitsPage = 1;
+let commitTotal = null;          // total commits on ref, from count=1 (cached)
+let commitsLoaded = 0;
+function renderCommitsInfo() {
+  const limit = +$("#commits-size").value;
+  const pages = commitTotal == null ? 0 : Math.max(1, Math.ceil(commitTotal / limit));
+  $("#commits-info").textContent = pages
+    ? `page ${commitsPage}/${pages} · ${commitTotal.toLocaleString()} commits`
+    : `page ${commitsPage} · ${commitsLoaded} commits`;
+  $("#commits-prev").disabled = commitsPage <= 1;
+  $("#commits-next").disabled = pages ? commitsPage >= pages : commitsLoaded < limit;
+}
 async function loadCommits() {
   const tok = ++commitsTok;
   const ref = $("#commits-ref").value;
-  const { commits } = await api(`/api/${repo}/commits?limit=50&ref=${encodeURIComponent(ref)}`);
+  const limit = +$("#commits-size").value;
+  const page = commitsPage;
+  const q = `limit=${limit}&page=${page}&ref=${encodeURIComponent(ref)}`;
+  const { commits } = await api(`/api/${repo}/commits?${q}`);
   if (tok !== commitsTok) return;
-  $("#commits-info").textContent = commits.length + " commits";
+  commitsLoaded = commits.length;
+  renderCommitsInfo();
   $("#commits-list").innerHTML = commits.map(c => `
     <div class="card"><div class="row" data-cid="${c.id}">
       <span class="sha" data-sha="${c.id}">${c.short_id}</span>
@@ -254,7 +306,7 @@ async function loadCommits() {
   });
   // +/− per commit: separate cached request so this first paint stays ~20 ms;
   // numbers pop in when ready (never blocks the list)
-  api(`/api/${repo}/commits?limit=50&ref=${encodeURIComponent(ref)}&stats=1`).then(({ commits: ws }) => {
+  api(`/api/${repo}/commits?${q}&stats=1`).then(({ commits: ws }) => {
     if (tok !== commitsTok) return;
     const m = new Map(ws.map(c => [c.id, c]));
     document.querySelectorAll("#commits-list .row[data-cid]").forEach(el => {
@@ -263,8 +315,19 @@ async function loadCommits() {
         `<span class="a">+${c.additions}</span> <span class="d">−${c.deletions}</span>`;
     });
   }).catch(() => {});
+  // page total: one cached full-history walk per ref, also background
+  if (commitTotal === null) {
+    api(`/api/${repo}/commits?ref=${encodeURIComponent(ref)}&count=1`).then(r => {
+      if (tok !== commitsTok) return;
+      commitTotal = r.count;
+      renderCommitsInfo();
+    }).catch(() => {});
+  }
 }
-$("#commits-ref").onchange = loadCommits;
+$("#commits-ref").onchange = () => { commitsPage = 1; commitTotal = null; loadCommits(); };
+$("#commits-size").onchange = () => { commitsPage = 1; loadCommits(); };
+$("#commits-prev").onclick = () => { if (commitsPage > 1) { commitsPage--; loadCommits(); } };
+$("#commits-next").onclick = () => { commitsPage++; loadCommits(); };
 
 function setRef(selId, value, label) {
   const sel = $("#" + selId);
@@ -276,6 +339,122 @@ function setRef(selId, value, label) {
   }
   sel.value = value;
 }
+
+let searchTok = 0, searchDeb = 0, searchTerms = [], searchRef = "";
+function highlight(text, terms) {
+  const marks = [];
+  const low = text.toLowerCase();
+  for (const t of terms) {
+    if (!t) continue;
+    let i = 0, j;
+    while ((j = low.indexOf(t, i)) !== -1) { marks.push([j, j + t.length]); i = j + t.length; }
+  }
+  if (!marks.length) return escapeHtml(text);
+  marks.sort((a, b) => a[0] - b[0]);
+  const merged = [marks[0]];
+  for (const m of marks.slice(1)) {
+    const last = merged[merged.length - 1];
+    if (m[0] <= last[1]) last[1] = Math.max(last[1], m[1]);
+    else merged.push(m);
+  }
+  let out = "", pos = 0;
+  for (const [s, e] of merged) { out += escapeHtml(text.slice(pos, s)) + "<mark>" + escapeHtml(text.slice(s, e)) + "</mark>"; pos = e; }
+  return out + escapeHtml(text.slice(pos));
+}
+async function openBlob(path) {
+  const el = $("#search-view");
+  el.style.display = "block";
+  el.innerHTML = '<span class="muted">loading…</span>';
+  try {
+    const b = await api(`/api/${repo}/blob?ref=${encodeURIComponent(searchRef)}&path=${encodeURIComponent(path)}`);
+    const body = b.binary ? '<span class="muted">binary file</span>' : fileView(b.text, searchTerms);
+    el.innerHTML = `<div class="toolbar" style="margin:0;padding:8px 12px;border-bottom:1px solid var(--border)">
+        <b style="font-family:var(--mono);font-size:13px">${escapeHtml(path)}</b>
+        <span class="muted">${b.truncated ? "truncated" : ""}</span></div>${body}`;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) { el.innerHTML = `<span class="muted">${escapeHtml(String(e))}</span>`; }
+}
+// snippet caps: one rendered view stays at one open-diff-file's worth of rows
+const FILE_CTX = 2, FILE_MAX_HUNKS = 120, FILE_MAX_LINES = 200, FILE_LINE_MAX = 400;
+function fileView(text, terms) {
+  const lines = text.split("\n");
+  const cut = (l) => l.length > FILE_LINE_MAX ? l.slice(0, FILE_LINE_MAX) + "…" : l;
+  if (!terms.length) {
+    const shown = lines.slice(0, FILE_MAX_LINES)
+      .map((l, i) => `<div class="frow"><span class="fgut">${i + 1}</span><span class="ftxt">${escapeHtml(cut(l))}</span></div>`).join("");
+    const more = lines.length > FILE_MAX_LINES
+      ? `<div class="muted" style="padding:6px 12px">… first ${FILE_MAX_LINES} of ${lines.length} lines</div>` : "";
+    return `<div class="fview">${shown}</div>${more}`;
+  }
+  const tl = terms.map(t => t.toLowerCase()).filter(Boolean);
+  const keep = [];
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].toLowerCase();
+    if (tl.some(t => l.includes(t))) keep.push(i);
+  }
+  if (!keep.length) {
+    return fileView(text, []); // terms matched the path, not the content
+  }
+  const hunks = [];
+  for (const i of keep) {
+    const s = Math.max(0, i - FILE_CTX), e = Math.min(lines.length - 1, i + FILE_CTX);
+    const last = hunks[hunks.length - 1];
+    if (last && s <= last.e + 1) last.e = e;
+    else hunks.push({ s, e });
+  }
+  const shown = hunks.slice(0, FILE_MAX_HUNKS);
+  const parts = [];
+  for (let h = 0; h < shown.length; h++) {
+    if (h) parts.push(`<div class="frow fsep"><span class="fgut">⋯</span><span class="ftxt"></span></div>`);
+    for (let i = shown[h].s; i <= shown[h].e; i++)
+      parts.push(`<div class="frow"><span class="fgut">${i + 1}</span><span class="ftxt">${highlight(cut(lines[i]), terms)}</span></div>`);
+  }
+  const more = hunks.length > shown.length
+    ? `<div class="muted" style="padding:6px 12px">… ${hunks.length - shown.length} more hunks</div>` : "";
+  return `<div class="fview">${parts.join("")}</div>${more}`;
+}
+async function doSearch() {
+  const q = $("#search-q").value.trim();
+  const tok = ++searchTok;
+  $("#search-view").style.display = "none";
+  if (!repo || !q) { $("#search-info").textContent = ""; $("#search-results").innerHTML = ""; return; }
+  searchRef = $("#search-ref").value;
+  try {
+    const r = await api(`/api/${repo}/search?ref=${encodeURIComponent(searchRef)}&q=${encodeURIComponent(q)}`);
+    if (tok !== searchTok) return;
+    searchTerms = q.split(/\s+/)
+      .filter(t => t && !t.startsWith("-") && !/^(ext|grep|content):/i.test(t))
+      .map(t => t.toLowerCase())
+      .concat(q.split(/\s+/).filter(t => /^(grep|content):/i.test(t)).map(t => t.split(":").slice(1).join(":").toLowerCase()));
+    $("#search-info").textContent =
+      `${r.files} file${r.files === 1 ? "" : "s"} · ${r.matches.length} match${r.matches.length === 1 ? "" : "es"} · ${r.took_ms} ms${r.truncated ? " · partial" : ""}`;
+    const rows = [];
+    for (const f of (r.hits || []).slice(0, 100))
+      rows.push(`<div class="card row" data-p="${escapeAttr(f.path)}" style="cursor:pointer">
+        <span style="font-family:var(--mono);font-size:12px">${escapeHtml(f.path)}</span>
+        <span class="badge" style="margin-left:auto">${f.score}</span></div>`);
+    const byPath = new Map();
+    for (const m of r.matches) {
+      if (!byPath.has(m.path)) byPath.set(m.path, []);
+      byPath.get(m.path).push(m);
+    }
+    for (const [path, ms] of byPath)
+      rows.push(`<div class="card" data-p="${escapeAttr(path)}" style="cursor:pointer">
+        <div class="row" style="padding:8px 14px;border-bottom:1px solid var(--border)">
+          <span style="font-family:var(--mono);font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(path)}</span>
+          <span class="badge">${ms.length} line${ms.length === 1 ? "" : "s"}</span></div>
+        ${ms.map(m => `<div class="row" style="padding:5px 14px;gap:10px;font-family:var(--mono);font-size:12px">
+          <span class="muted" style="min-width:36px;text-align:right">${m.line}</span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(m.text)}</span></div>`).join("")}
+      </div>`);
+    $("#search-results").innerHTML = rows.join("");
+    $("#search-results").querySelectorAll("[data-p]").forEach(el => el.onclick = () => openBlob(el.dataset.p));
+  } catch (e) {
+    if (tok === searchTok) $("#search-info").textContent = String(e);
+  }
+}
+$("#search-q").addEventListener("input", () => { clearTimeout(searchDeb); searchDeb = setTimeout(doSearch, 250); });
+$("#search-ref").onchange = doSearch;
 
 $("#diff-btn").onclick = async () => {
   const base = $("#base-ref").value, head = $("#head-ref").value;

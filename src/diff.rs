@@ -17,7 +17,7 @@ impl std::fmt::Display for NotFound {
 
 impl std::error::Error for NotFound {}
 
-fn not_found(msg: impl Into<String>) -> anyhow::Error {
+pub(crate) fn not_found(msg: impl Into<String>) -> anyhow::Error {
     NotFound(msg.into()).into()
 }
 
@@ -62,7 +62,7 @@ pub struct FileDiff {
     pub hunks: Vec<Hunk>,
 }
 
-fn commit_of<'r>(repo: &'r gix::Repository, spec: &str) -> Result<gix::Commit<'r>> {
+pub(crate) fn commit_of<'r>(repo: &'r gix::Repository, spec: &str) -> Result<gix::Commit<'r>> {
     let id = repo
         .rev_parse_single(spec)
         .map_err(|_| not_found(format!("unknown ref: {spec}")))?;
@@ -627,6 +627,7 @@ pub fn commits(
     limit: usize,
     refspec: Option<&str>,
     want_stats: bool,
+    offset: usize,
 ) -> Result<Vec<CommitInfo>> {
     let tsr = crate::repo::get(mirror)?;
     let repo = crate::repo::handle(&tsr);
@@ -644,36 +645,43 @@ pub fn commits(
     let mut out = Vec::new();
     let mut ids: Vec<gix::ObjectId> = Vec::new();
     let mut parents: Vec<Option<gix::ObjectId>> = Vec::new();
+    // pagination: walk `offset` commits past without collecting them (their
+    // parents still feed the heap — that's the walk), then collect `limit`
+    let mut skipped = 0usize;
     while let Some((_, id)) = heap.pop() {
-        if out.len() >= limit {
+        if skipped >= offset && out.len() >= limit {
             break;
         }
         let commit = repo
             .find_object(id)?
             .try_into_commit()
             .context("walk target is not a commit")?;
-        let full = commit.id().to_string();
-        let summary = commit
-            .message_raw()
-            .map(|m| String::from_utf8_lossy(m.as_bytes()))
-            .unwrap_or_default();
-        let author = commit
-            .author()
-            .map(|a| String::from_utf8_lossy(a.name.as_bytes()).to_string())
-            .unwrap_or_default();
-        let time = commit.time().map(|t| t.seconds).unwrap_or(0);
-        let p0 = commit.parent_ids().next().map(|p| p.detach());
-        ids.push(id);
-        parents.push(p0);
-        out.push(CommitInfo {
-            short_id: full[..8.min(full.len())].to_string(),
-            id: full,
-            summary: summary.lines().next().unwrap_or("").to_string(),
-            author,
-            time,
-            additions: 0,
-            deletions: 0,
-        });
+        if skipped < offset {
+            skipped += 1;
+        } else {
+            let full = commit.id().to_string();
+            let summary = commit
+                .message_raw()
+                .map(|m| String::from_utf8_lossy(m.as_bytes()))
+                .unwrap_or_default();
+            let author = commit
+                .author()
+                .map(|a| String::from_utf8_lossy(a.name.as_bytes()).to_string())
+                .unwrap_or_default();
+            let time = commit.time().map(|t| t.seconds).unwrap_or(0);
+            let p0 = commit.parent_ids().next().map(|p| p.detach());
+            ids.push(id);
+            parents.push(p0);
+            out.push(CommitInfo {
+                short_id: full[..8.min(full.len())].to_string(),
+                id: full,
+                summary: summary.lines().next().unwrap_or("").to_string(),
+                author,
+                time,
+                additions: 0,
+                deletions: 0,
+            });
+        }
         for pid in commit.parent_ids() {
             let pid = pid.detach();
             if seen.insert(pid) {
@@ -723,6 +731,39 @@ pub fn commits(
         }
     }
     Ok(out)
+}
+
+/// `rev-list --count`: every commit reachable from ref — same graph the
+/// paginated walk enumerates, so page total = ceil(count / limit).
+pub fn commit_count(mirror: &PathBuf, refspec: Option<&str>) -> Result<usize> {
+    let tsr = crate::repo::get(mirror)?;
+    let repo = crate::repo::handle(&tsr);
+    let root = commit_of(&repo, refspec.unwrap_or("HEAD"))?;
+    let mut seen = std::collections::HashSet::new();
+    let mut heap: std::collections::BinaryHeap<(i64, gix::ObjectId)> =
+        std::collections::BinaryHeap::new();
+    let root_id = root.id().detach();
+    seen.insert(root_id);
+    heap.push((root.time().map(|t| t.seconds).unwrap_or(0), root_id));
+    let mut n = 0usize;
+    while let Some((_, id)) = heap.pop() {
+        n += 1;
+        let commit = repo
+            .find_object(id)?
+            .try_into_commit()
+            .context("walk target is not a commit")?;
+        for pid in commit.parent_ids() {
+            let pid = pid.detach();
+            if seen.insert(pid) {
+                let parent = repo
+                    .find_object(pid)?
+                    .try_into_commit()
+                    .context("parent is not a commit")?;
+                heap.push((parent.time().map(|t| t.seconds).unwrap_or(0), pid));
+            }
+        }
+    }
+    Ok(n)
 }
 
 #[derive(Serialize, Clone)]

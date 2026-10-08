@@ -1,4 +1,4 @@
-use crate::{diff, mirror, AppState};
+use crate::{diff, mirror, search, AppState};
 use axum::body::{Body, Bytes};
 use axum::extract::{Path, Query, Request, State};
 use axum::http::{header, StatusCode};
@@ -91,6 +91,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/{owner}/{repo}/commits", get(commits))
         .route("/api/{owner}/{repo}/diff", get(diff_summary))
         .route("/api/{owner}/{repo}/file", get(file_diff))
+        .route("/api/{owner}/{repo}/search", get(search))
+        .route("/api/{owner}/{repo}/blob", get(blob))
         .route("/api/{owner}/{repo}/pulls", get(pulls))
         .layer(middleware::from_fn(count_requests))
         .with_state(state)
@@ -230,11 +232,21 @@ struct CommitsQuery {
     /// `stats=1` fills +/− per commit (second cached pass; list without it
     /// stays a pure commit walk). String, not bool — axum rejects `1` as bool.
     stats: Option<String>,
+    /// 1-based page; page N walks past (N-1)*limit commits
+    page: Option<usize>,
+    /// `count=1` → {"count": N} total reachable commits (separate cached
+    /// pass; list never blocks on it)
+    count: Option<String>,
 }
 
 #[derive(Serialize)]
 struct CommitsResp {
     commits: Vec<diff::CommitInfo>,
+}
+
+#[derive(Serialize)]
+struct CountResp {
+    count: usize,
 }
 
 async fn commits(
@@ -243,13 +255,32 @@ async fn commits(
 ) -> Result<Response, (StatusCode, String)> {
     let r = mirror::RepoRef { owner, name: repo };
     let path = mirror::mirror_path(&r);
-    let limit = q.limit.unwrap_or(50).min(500);
     let refspec = q.r#ref.clone();
+    if q.count.as_deref() == Some("1") {
+        let key = resp_key(
+            &path,
+            &format!("commits_count\0{}", refspec.as_deref().unwrap_or("")),
+        );
+        if let Some(b) = resp_get(&key) {
+            return Ok(json_body(b));
+        }
+        let body = tokio::task::spawn_blocking(move || {
+            let count = diff::commit_count(&path, refspec.as_deref())?;
+            serde_json::to_vec(&CountResp { count }).map_err(anyhow::Error::from)
+        })
+        .await
+        .map_err(|e| api_err(e.into()))?
+        .map_err(api_err)?;
+        return Ok(json_body(resp_put(key, body)));
+    }
+    let limit = q.limit.unwrap_or(50).min(500);
     let want_stats = q.stats.as_deref() == Some("1");
+    let page = q.page.unwrap_or(1).max(1);
+    let offset = page.saturating_sub(1).saturating_mul(limit);
     let key = resp_key(
         &path,
         &format!(
-            "commits\0{limit}\0{}\0{want_stats}",
+            "commits\0{limit}\0{}\0{want_stats}\0{page}",
             refspec.as_deref().unwrap_or("")
         ),
     );
@@ -257,7 +288,7 @@ async fn commits(
         return Ok(json_body(b));
     }
     let body = tokio::task::spawn_blocking(move || {
-        let list = diff::commits(&path, limit, refspec.as_deref(), want_stats)?;
+        let list = diff::commits(&path, limit, refspec.as_deref(), want_stats, offset)?;
         serde_json::to_vec(&CommitsResp { commits: list }).map_err(anyhow::Error::from)
     })
     .await
@@ -324,6 +355,62 @@ async fn file_diff(
     let body = tokio::task::spawn_blocking(move || {
         let fd = diff::file_diff(&path, &base, &head, &p, op.as_deref())?;
         serde_json::to_vec(&fd).map_err(anyhow::Error::from)
+    })
+    .await
+    .map_err(|e| api_err(e.into()))?
+    .map_err(api_err)?;
+    Ok(json_body(resp_put(key, body)))
+}
+
+#[derive(Deserialize)]
+struct SearchQuery {
+    r#ref: Option<String>,
+    q: String,
+}
+
+async fn search(
+    Path((owner, repo)): Path<(String, String)>,
+    Query(q): Query<SearchQuery>,
+) -> Result<Response, (StatusCode, String)> {
+    let r = mirror::RepoRef { owner, name: repo };
+    let path = mirror::mirror_path(&r);
+    let refspec = q.r#ref.clone().unwrap_or_else(|| "HEAD".to_string());
+    let key = resp_key(&path, &format!("search\0{refspec}\0{}", q.q));
+    if let Some(b) = resp_get(&key) {
+        return Ok(json_body(b));
+    }
+    let query = q.q.clone();
+    let body = tokio::task::spawn_blocking(move || {
+        let sr = search::search(&path, &refspec, &query)?;
+        serde_json::to_vec(&sr).map_err(anyhow::Error::from)
+    })
+    .await
+    .map_err(|e| api_err(e.into()))?
+    .map_err(api_err)?;
+    Ok(json_body(resp_put(key, body)))
+}
+
+#[derive(Deserialize)]
+struct BlobQuery {
+    r#ref: Option<String>,
+    path: String,
+}
+
+async fn blob(
+    Path((owner, repo)): Path<(String, String)>,
+    Query(q): Query<BlobQuery>,
+) -> Result<Response, (StatusCode, String)> {
+    let r = mirror::RepoRef { owner, name: repo };
+    let path = mirror::mirror_path(&r);
+    let refspec = q.r#ref.clone().unwrap_or_else(|| "HEAD".to_string());
+    let key = resp_key(&path, &format!("blob\0{refspec}\0{}", q.path));
+    if let Some(b) = resp_get(&key) {
+        return Ok(json_body(b));
+    }
+    let p = q.path.clone();
+    let body = tokio::task::spawn_blocking(move || {
+        let br = search::blob_text(&path, &refspec, &p)?;
+        serde_json::to_vec(&br).map_err(anyhow::Error::from)
     })
     .await
     .map_err(|e| api_err(e.into()))?

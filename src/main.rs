@@ -5,6 +5,7 @@ mod log;
 mod mirror;
 mod repo;
 mod rewrite;
+mod search;
 mod server;
 
 use anyhow::{bail, Result};
