@@ -194,7 +194,7 @@ fn stat_chunk(
     let repo = crate::repo::handle(&tsr);
     let mut out = Vec::with_capacity(changes.len());
     for (idx, change) in changes {
-        let (path, old_path, status, old_id, new_id, is_tree) = match change {
+        let (path, old_path, status, old_id, new_id, is_tree, is_gitlink) = match change {
             Change::Addition {
                 location,
                 entry_mode,
@@ -207,6 +207,7 @@ fn stat_chunk(
                 None,
                 Some(id),
                 entry_mode.is_tree(),
+                entry_mode.is_commit(),
             ),
             Change::Deletion {
                 location,
@@ -220,6 +221,7 @@ fn stat_chunk(
                 Some(id),
                 None,
                 entry_mode.is_tree(),
+                entry_mode.is_commit(),
             ),
             Change::Modification {
                 location,
@@ -234,6 +236,7 @@ fn stat_chunk(
                 Some(previous_id),
                 Some(id),
                 entry_mode.is_tree(),
+                entry_mode.is_commit(),
             ),
             Change::Rewrite {
                 location,
@@ -250,6 +253,7 @@ fn stat_chunk(
                 Some(source_id),
                 Some(id),
                 entry_mode.is_tree(),
+                entry_mode.is_commit(),
             ),
         };
 
@@ -260,6 +264,16 @@ fn stat_chunk(
         let same_blob = matches!((&old_id, &new_id), (Some(a), Some(b)) if a == b);
         let (additions, deletions, binary) = if same_blob {
             (0, 0, false)
+        } else if is_gitlink {
+            // submodule gitlink: the commit lives in another object database —
+            // no content here. git counts its single "Subproject commit" line:
+            // +1 on add, −1 on delete, 1/1 on change.
+            match (&old_id, &new_id) {
+                (Some(a), Some(b)) if a != b => (1, 1, false),
+                (None, Some(_)) => (1, 0, false),
+                (Some(_), None) => (0, 1, false),
+                _ => (0, 0, false),
+            }
         } else {
             let old_bytes = match old_id {
                 Some(id) => blob_bytes(&mirror, &repo, id)?,
@@ -319,14 +333,81 @@ pub fn file_diff(
     let head_tree = head_commit.tree()?;
 
     // renamed files sit under their pre-rename name on the base side
-    let old_id = base_tree
-        .lookup_entry_by_path(old_path.unwrap_or(path))?
-        .map(|e| e.object_id());
-    let new_id = head_tree
-        .lookup_entry_by_path(path)?
-        .map(|e| e.object_id());
+    let old_entry = base_tree.lookup_entry_by_path(old_path.unwrap_or(path))?;
+    let new_entry = head_tree.lookup_entry_by_path(path)?;
+    let (old_id, old_is_gitlink) = match old_entry {
+        Some(e) => (Some(e.object_id()), e.mode().is_commit()),
+        None => (None, false),
+    };
+    let (new_id, new_is_gitlink) = match new_entry {
+        Some(e) => (Some(e.object_id()), e.mode().is_commit()),
+        None => (None, false),
+    };
     if old_id.is_none() && new_id.is_none() {
         return Err(not_found(format!("path not found in either ref: {path}")));
+    }
+
+    // submodule gitlink: commit lives in another object database — synthesize
+    // git's one-line "Subproject commit" pseudo-diff instead of loading content
+    if old_is_gitlink || new_is_gitlink {
+        let sub = |id: &Option<gix::ObjectId>| {
+            id.map(|i| format!("Subproject commit {i}")).unwrap_or_default()
+        };
+        let (lines, old_start, old_count, new_start, new_count) = match (&old_id, &new_id) {
+            (Some(a), Some(b)) if a != b => (
+                vec![
+                    HunkLine {
+                        kind: "del",
+                        text: sub(&old_id),
+                    },
+                    HunkLine {
+                        kind: "add",
+                        text: sub(&new_id),
+                    },
+                ],
+                1,
+                1,
+                1,
+                1,
+            ),
+            (None, Some(_)) => (
+                vec![HunkLine {
+                    kind: "add",
+                    text: sub(&new_id),
+                }],
+                0,
+                0,
+                1,
+                1,
+            ),
+            (Some(_), None) => (
+                vec![HunkLine {
+                    kind: "del",
+                    text: sub(&old_id),
+                }],
+                1,
+                1,
+                0,
+                0,
+            ),
+            _ => (Vec::new(), 0, 0, 0, 0),
+        };
+        let hunks = if lines.is_empty() {
+            Vec::new()
+        } else {
+            vec![Hunk {
+                old_start,
+                old_count,
+                new_start,
+                new_count,
+                lines,
+            }]
+        };
+        return Ok(FileDiff {
+            path: path.to_string(),
+            binary: false,
+            hunks,
+        });
     }
 
     let old_bytes: Option<std::sync::Arc<[u8]>> = match old_id {
