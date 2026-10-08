@@ -63,6 +63,9 @@
             font-family:var(--mono); border-top:1px solid var(--border); border-bottom:1px solid var(--border);
             position:sticky; top:0; }
   .gap { text-align:center; color:var(--muted); background:#21262d; padding:4px; font-size:12px; }
+  .file-meta { padding:6px 14px; color:var(--muted); font-size:12px; }
+  .file-loading { padding:8px 14px; color:var(--muted); font-size:13px; }
+  .card.open .card-h { background:var(--panel2); }
   .row { padding:10px 14px; border-bottom:1px solid var(--border); display:flex; gap:12px;
          align-items:baseline; font-size:13px; transition:background-color .12s; }
   .row:hover { background:#1c212980; }
@@ -108,7 +111,6 @@
       <span class="muted" id="diff-info"></span>
     </div>
     <div id="diff-summary"></div>
-    <div id="diff-file"></div>
   </section>
 
   <section id="tab-pulls" style="display:none">
@@ -199,6 +201,11 @@ $("#sync-btn").onclick = async () => {
 
 async function loadRefs() {
   const { refs } = await api(`/api/${repo}/refs`);
+  // default branch first, then alphabetical — alphabetical alone put ancient
+  // tags (bisect, gitgui-0.10.0…) on top and the whole list looked old-first
+  const pref = ["main", "master"];
+  const rank = (n) => { const i = pref.indexOf(n); return i < 0 ? pref.length : i; };
+  refs.sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
   for (const id of ["commits-ref","base-ref","head-ref"]) {
     const sel = $("#" + id); sel.innerHTML = "";
     refs.forEach(r => { const o = document.createElement("option"); o.value = r.name; o.textContent = r.name; sel.appendChild(o); });
@@ -206,7 +213,8 @@ async function loadRefs() {
   const names = refs.map(r => r.name);
   if (names.includes("main")) $("#base-ref").value = "main";
   else if (names.includes("master")) $("#base-ref").value = "master";
-  if (names.length > 1) $("#head-ref").value = names.find(n => n !== $("#base-ref").value) || names[0];
+  // GitHub-style default: base == head ("up to date") until the user picks
+  $("#head-ref").value = $("#base-ref").value;
 }
 
 async function loadCommits() {
@@ -246,7 +254,7 @@ $("#diff-btn").onclick = async () => {
   try {
     const s = await api(`/api/${repo}/diff?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
     $("#diff-info").textContent = `${s.files.length} files  +${s.total_additions} −${s.total_deletions}  (${Math.round(performance.now()-t0)}ms)`;
-    $("#diff-file").innerHTML = "";
+    diffBase = base; diffHead = head;
     $("#diff-summary").innerHTML = s.files.map(f => `
       <div class="card"><div class="card-h" data-path="${escapeAttr(f.path)}" data-opath="${escapeAttr(f.old_path || "")}">
         <span class="status ${f.status}">${f.status}</span>
@@ -254,42 +262,64 @@ $("#diff-btn").onclick = async () => {
         ${f.old_path && f.old_path !== f.path ? `<span class="muted">← ${escapeHtml(f.old_path)}</span>` : ""}
         <span class="stat">${f.binary ? '<span class="muted">binary</span>' : `<span class="a">+${f.additions}</span> <span class="d">−${f.deletions}</span>`}</span>
       </div></div>`).join("");
-    document.querySelectorAll(".card-h[data-path]").forEach(el => el.onclick = () => openFile(base, head, el.dataset.path, el.dataset.opath));
   } catch (e) {
     $("#diff-info").textContent = "";
     toast("diff failed: " + e.message);
   }
 };
 
-async function openFile(base, head, path, opath) {
-  let u = `/api/${repo}/file?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}&path=${encodeURIComponent(path)}`;
-  if (opath && opath !== path) u += `&old_path=${encodeURIComponent(opath)}`;
-  const fd = await api(u);
-  if (fd.binary) {
-    $("#diff-file").innerHTML = `<div class="card"><div class="card-h">${escapeHtml(path)} <span class="muted">binary file</span></div></div>`;
-    return;
+// file diffs expand inside their own card (one delegated listener instead of
+// per-card handlers; content-visibility on .ln keeps big hunks off the layout
+// until scrolled to — no jump to page bottom like the old footer container)
+let diffBase = "", diffHead = "";
+$("#diff-summary").addEventListener("click", (e) => {
+  const h = e.target.closest(".card-h[data-path]");
+  if (h) toggleFile(h);
+});
+
+async function toggleFile(h) {
+  const card = h.parentElement;
+  const open = card.querySelector(".file-body");
+  if (open) { open.remove(); card.classList.remove("open"); return; }
+  const body = document.createElement("div");
+  body.className = "file-body";
+  body.innerHTML = '<div class="file-loading">loading…</div>';
+  card.appendChild(body);
+  card.classList.add("open");
+  let u = `/api/${repo}/file?base=${encodeURIComponent(diffBase)}&head=${encodeURIComponent(diffHead)}&path=${encodeURIComponent(h.dataset.path)}`;
+  if (h.dataset.opath && h.dataset.opath !== h.dataset.path) u += `&old_path=${encodeURIComponent(h.dataset.opath)}`;
+  try {
+    const fd = await api(u);
+    if (!body.isConnected) return; // new diff ran while fetching
+    body.innerHTML = fileBody(fd, h.dataset.path);
+  } catch (e) {
+    if (body.isConnected) body.innerHTML = `<div class="file-loading">failed: ${escapeHtml(e.message)}</div>`;
   }
-  let body = "";
-  let prev = null;
+}
+
+function fileBody(fd, path) {
+  if (fd.binary) return `<div class="file-meta">${escapeHtml(path)} — binary file</div>`;
+  if (!fd.hunks.length) return `<div class="file-meta">no textual changes</div>`;
+  let out = "", prev = null;
   for (const h of fd.hunks) {
     const gapOld = prev ? h.old_start - (prev.old_start + prev.old_count) : (h.old_count ? h.old_start - 1 : h.old_start);
     const gapNew = prev ? h.new_start - (prev.new_start + prev.new_count) : (h.new_count ? h.new_start - 1 : h.new_start);
     const gap = Math.max(gapOld, gapNew, 0);
-    if (gap > 0) body += `<div class="gap">⋯ ${gap} lines unchanged</div>`;
-    body += `<div class="hunk-h">@@ -${h.old_start},${h.old_count} +${h.new_start},${h.new_count} @@</div>`;
+    if (gap > 0) out += `<div class="gap">⋯ ${gap} lines unchanged</div>`;
+    out += `<div class="hunk-h">@@ -${h.old_start},${h.old_count} +${h.new_start},${h.new_count} @@</div>`;
     let o = h.old_start, n = h.new_start;
     for (const l of h.lines) {
       let oc = "", nc = "";
       if (l.kind === "del") oc = o++;
       else if (l.kind === "add") nc = n++;
       else { oc = o++; nc = n++; }
-      body += `<div class="ln ${l.kind === "add" ? "add" : l.kind === "del" ? "del" : ""}">
+      out += `<div class="ln ${l.kind === "add" ? "add" : l.kind === "del" ? "del" : ""}">
         <span class="n">${oc}</span><span class="n2">${nc}</span><span class="t">${escapeHtml(l.text) || " "}</span></div>`;
     }
     prev = h;
   }
   const total = fd.hunks.reduce((s, h) => s + h.lines.length, 0);
-  $("#diff-file").innerHTML = `<div class="card"><div class="card-h">${escapeHtml(path)} <span class="muted">${fd.hunks.length} hunks · ${total} lines</span></div><div class="lines">${body}</div></div>`;
+  return `<div class="file-meta">${fd.hunks.length} hunks · ${total} lines</div><div class="lines">${out}</div>`;
 }
 
 async function loadPulls() {
