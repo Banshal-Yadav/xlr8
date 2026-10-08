@@ -49,8 +49,11 @@
   .status { width:18px; text-align:center; font-weight:700; font-family:var(--mono); }
   .status.A { color:var(--addfg); } .status.D { color:var(--delfg); } .status.M { color:var(--warn); } .status.R { color:var(--accent); }
   .mono { color:var(--muted); font-size:12px; font-family:var(--mono); }
-  .lines { overflow-x:auto; }
-  .ln { display:flex; white-space:pre; content-visibility:auto; contain-intrinsic-size:auto 21px;
+  /* windowed rows: only the viewport slice is in the DOM, positions are
+     absolute against total height — fixed row heights keep the math exact */
+  .vlines { position:relative; overflow-x:auto; }
+  .vlines > * { position:absolute; left:0; width:max-content; min-width:100%; }
+  .ln { display:flex; white-space:pre; height:22px; line-height:22px;
         font-family:var(--mono); font-size:12.5px; }
   .ln .n, .ln .n2 { width:48px; flex:none; text-align:right; padding-right:8px; color:var(--muted);
                     user-select:none; background:#0d1117cc; position:sticky; }
@@ -59,10 +62,11 @@
   .ln .t { padding-left:8px; }
   .ln.add { background:var(--add); } .ln.add .t { color:var(--addfg); }
   .ln.del { background:var(--del); } .ln.del .t { color:var(--delfg); }
-  .hunk-h { background:var(--panel2); color:var(--accent); padding:3px 10px; font-size:12px;
-            font-family:var(--mono); border-top:1px solid var(--border); border-bottom:1px solid var(--border);
-            position:sticky; top:0; }
-  .gap { text-align:center; color:var(--muted); background:#21262d; padding:4px; font-size:12px; }
+  .hunk-h { background:var(--panel2); color:var(--accent); padding:3px 10px; font-size:12px; line-height:19px;
+            height:27px; overflow:hidden; box-sizing:border-box;
+            font-family:var(--mono); border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+  .gap { text-align:center; color:var(--muted); background:#21262d; padding:4px; font-size:12px; line-height:19px;
+         height:27px; overflow:hidden; box-sizing:border-box; }
   .file-meta { padding:6px 14px; color:var(--muted); font-size:12px; }
   .file-loading { padding:8px 14px; color:var(--muted); font-size:13px; }
   .card.open .card-h { background:var(--panel2); }
@@ -255,6 +259,7 @@ $("#diff-btn").onclick = async () => {
     const s = await api(`/api/${repo}/diff?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
     $("#diff-info").textContent = `${s.files.length} files  +${s.total_additions} −${s.total_deletions}  (${Math.round(performance.now()-t0)}ms)`;
     diffBase = base; diffHead = head;
+    vclose($("#diff-summary"));
     $("#diff-summary").innerHTML = s.files.map(f => `
       <div class="card"><div class="card-h" data-path="${escapeAttr(f.path)}" data-opath="${escapeAttr(f.old_path || "")}">
         <span class="status ${f.status}">${f.status}</span>
@@ -280,46 +285,107 @@ $("#diff-summary").addEventListener("click", (e) => {
 async function toggleFile(h) {
   const card = h.parentElement;
   const open = card.querySelector(".file-body");
-  if (open) { open.remove(); card.classList.remove("open"); return; }
+  if (open) { vclose(open); open.remove(); card.classList.remove("open"); vshift(); return; }
   const body = document.createElement("div");
   body.className = "file-body";
   body.innerHTML = '<div class="file-loading">loading…</div>';
   card.appendChild(body);
   card.classList.add("open");
+  vshift();
   let u = `/api/${repo}/file?base=${encodeURIComponent(diffBase)}&head=${encodeURIComponent(diffHead)}&path=${encodeURIComponent(h.dataset.path)}`;
   if (h.dataset.opath && h.dataset.opath !== h.dataset.path) u += `&old_path=${encodeURIComponent(h.dataset.opath)}`;
   try {
     const fd = await api(u);
     if (!body.isConnected) return; // new diff ran while fetching
     body.innerHTML = fileBody(fd, h.dataset.path);
+    vmount(body);
   } catch (e) {
     if (body.isConnected) body.innerHTML = `<div class="file-loading">failed: ${escapeHtml(e.message)}</div>`;
   }
 }
 
+// ---- windowed diff rendering ------------------------------------------------
+// rows live in JS (tops = prefix-sum of fixed heights); the DOM holds only the
+// viewport slice ± 600 px per open file, so 10 × 20k-line diffs cost ~600
+// nodes each and open instantly — full-list DOM would be ~800k nodes.
+const VREG = [];                                   // {rows, tops}
+const vboxes = new Set();                          // mounted .vlines elements
+const V_H = [22, 27, 27];                          // ln / hunk / gap px (CSS-synced)
+let vframe = 0;
+
+function vmount(scope) {
+  const box = scope.querySelector(".vlines");
+  if (!box) return;
+  vboxes.add(box);
+  vshift();                                          // re-offsets all, renders next frame
+}
+function vclose(scope) {
+  for (const b of scope.querySelectorAll(".vlines")) {
+    vboxes.delete(b);
+    const e = VREG[b.dataset.v | 0];
+    if (e) { e.rows = null; e.tops = null; }        // free the row data
+  }
+}
+function voff(box) { box._off = box.getBoundingClientRect().top + scrollY; }
+function vshift() { vboxes.forEach(voff); vpump(); }   // expand/collapse moves every box below
+function vpump() {
+  if (vframe) return;
+  vframe = requestAnimationFrame(() => { vframe = 0; vboxes.forEach(vslice); });
+}
+function vfind(tops, x) {                          // first idx with tops[idx] >= x
+  let lo = 0, hi = tops.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (tops[m] < x) lo = m + 1; else hi = m; }
+  return lo;
+}
+function vslice(box) {
+  const e = VREG[box.dataset.v | 0];
+  if (!e || !e.rows) return;
+  const start = scrollY - box._off - 600, end = scrollY - box._off + innerHeight + 600;
+  if (end < 0 || start > e.tops[e.rows.length]) return;   // fully offscreen
+  const i = Math.max(0, vfind(e.tops, start) - 1);
+  const j = Math.min(e.rows.length, vfind(e.tops, end) + 1);
+  if (box._i === i && box._j === j) return;
+  let html = "";
+  for (let k = i; k < j; k++) html += vrow(e.rows[k], e.tops[k]);
+  box.innerHTML = html;
+  box._i = i; box._j = j;
+}
+function vrow(r, top) {
+  if (r[0] === "h") return `<div class="hunk-h" style="top:${top}px">${r[1]}</div>`;
+  if (r[0] === "g") return `<div class="gap" style="top:${top}px">${r[1]}</div>`;
+  return `<div class="ln ${r[0]}" style="top:${top}px">
+    <span class="n">${r[1]}</span><span class="n2">${r[2]}</span><span class="t">${escapeHtml(r[3]) || " "}</span></div>`;
+}
+addEventListener("scroll", vpump, { passive: true });
+addEventListener("resize", () => { vboxes.forEach(voff); vpump(); });
+
 function fileBody(fd, path) {
   if (fd.binary) return `<div class="file-meta">${escapeHtml(path)} — binary file</div>`;
   if (!fd.hunks.length) return `<div class="file-meta">no textual changes</div>`;
-  let out = "", prev = null;
+  const rows = [];
+  let prev = null;
   for (const h of fd.hunks) {
     const gapOld = prev ? h.old_start - (prev.old_start + prev.old_count) : (h.old_count ? h.old_start - 1 : h.old_start);
     const gapNew = prev ? h.new_start - (prev.new_start + prev.new_count) : (h.new_count ? h.new_start - 1 : h.new_start);
     const gap = Math.max(gapOld, gapNew, 0);
-    if (gap > 0) out += `<div class="gap">⋯ ${gap} lines unchanged</div>`;
-    out += `<div class="hunk-h">@@ -${h.old_start},${h.old_count} +${h.new_start},${h.new_count} @@</div>`;
+    if (gap > 0) rows.push(["g", `⋯ ${gap} lines unchanged`]);
+    rows.push(["h", `@@ -${h.old_start},${h.old_count} +${h.new_start},${h.new_count} @@`]);
     let o = h.old_start, n = h.new_start;
     for (const l of h.lines) {
       let oc = "", nc = "";
       if (l.kind === "del") oc = o++;
       else if (l.kind === "add") nc = n++;
       else { oc = o++; nc = n++; }
-      out += `<div class="ln ${l.kind === "add" ? "add" : l.kind === "del" ? "del" : ""}">
-        <span class="n">${oc}</span><span class="n2">${nc}</span><span class="t">${escapeHtml(l.text) || " "}</span></div>`;
+      rows.push([l.kind === "add" ? "add" : l.kind === "del" ? "del" : "", oc, nc, l.text]);
     }
     prev = h;
   }
+  const tops = new Int32Array(rows.length + 1);
+  for (let k = 0; k < rows.length; k++) tops[k + 1] = tops[k] + V_H[rows[k][0] === "h" ? 1 : rows[k][0] === "g" ? 2 : 0];
+  const idx = VREG.push({ rows, tops }) - 1;
   const total = fd.hunks.reduce((s, h) => s + h.lines.length, 0);
-  return `<div class="file-meta">${fd.hunks.length} hunks · ${total} lines</div><div class="lines">${out}</div>`;
+  return `<div class="file-meta">${fd.hunks.length} hunks · ${total} lines</div>
+    <div class="vlines" data-v="${idx}" style="height:${tops[rows.length]}px"></div>`;
 }
 
 async function loadPulls() {
