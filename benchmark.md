@@ -186,8 +186,9 @@ are **0.5-threshold boundary cases** where git's xdl byte accounting lands
 ## Known gaps
 
 1. **Cold first request** pays the blob-cache fill (stress 319 ms vs 96 ms
-   warm) plus repo open + pack mmap (hello 33 ms cold-proc vs 3.4–9 warm).
-   Could pre-warm on startup; not done.
+   warm). Repo open + pack index moved off the request path by startup
+   prewarm (timeline row 15), but the cache fill itself still lands on the
+   first compare — pre-filling at boot not done.
 2. ~~refs endpoint peels every ref on each hit~~ — fixed: ref list is
    cached per mirror (row 14 precursor) and the response body is cached
    too; first tokio hit 187 ms, then 1.4–15 ms.
@@ -197,9 +198,10 @@ are **0.5-threshold boundary cases** where git's xdl byte accounting lands
 5. **Response cache memory**: up to 32 MB of serialized bodies, cleared
    wholesale for a mirror on sync (and for all mirrors if the cap is
    hit). Bodies > 32 MB are never cached (compute every time).
-6. **Rename scoring** (93–129 ms of tkL compute) is unchanged — it is the
-   correctness-critical path; parallel already (6 workers). Only a result
-   cache sits in front of it.
+6. **Rename scoring** (93–129 ms of tkL phone compute, 60 ms laptop) is
+   unchanged — it is the correctness-critical path. Parallel (capped at 8
+   workers; stats caps at 16 — `XLR8_THREADS` overrides both). Only a
+   result cache sits in front of it.
 
 ## Windows laptop — full re-run (2026-10-07)
 
