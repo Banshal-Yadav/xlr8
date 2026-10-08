@@ -1,14 +1,20 @@
 use crate::{diff, mirror, AppState};
 use axum::body::{Body, Bytes};
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, Query, Request, State};
 use axum::http::{header, StatusCode};
+use axum::middleware::{self, Next};
 use axum::response::{Html, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
+
+static REQ: AtomicU64 = AtomicU64::new(0);
+static START: OnceLock<Instant> = OnceLock::new();
 
 /// Serialized JSON per (mirror, request). The mirror is immutable between
 /// pulls, so a repeat compare/file/commits/refs request is served straight
@@ -75,16 +81,81 @@ fn json_body(bytes: Bytes) -> Response {
 }
 
 pub fn router(state: AppState) -> Router {
+    START.get_or_init(Instant::now);
     Router::new()
         .route("/", get(index))
         .route("/api/repos", get(list_repos))
+        .route("/api/stats", get(stats))
         .route("/api/sync", post(sync_repo))
         .route("/api/{owner}/{repo}/refs", get(refs))
         .route("/api/{owner}/{repo}/commits", get(commits))
         .route("/api/{owner}/{repo}/diff", get(diff_summary))
         .route("/api/{owner}/{repo}/file", get(file_diff))
         .route("/api/{owner}/{repo}/pulls", get(pulls))
+        .layer(middleware::from_fn(count_requests))
         .with_state(state)
+}
+
+/// One relaxed atomic add per request — ~1 ns on a 700 µs–4 ms endpoint.
+async fn count_requests(req: Request, next: Next) -> Response {
+    REQ.fetch_add(1, Ordering::Relaxed);
+    next.run(req).await
+}
+
+#[derive(Serialize)]
+struct StatsResp {
+    rss: u64,
+    cpu_ms: u64,
+    uptime_s: u64,
+    reqs: u64,
+    cache_bytes: usize,
+    cache_entries: usize,
+}
+
+/// Reads /proc only when hit (frontend throttles to ≥2 s) — no hot path
+/// touches it, and nothing is precomputed per request.
+async fn stats() -> Json<StatsResp> {
+    let mut rss = 0u64;
+    if let Ok(s) = std::fs::read_to_string("/proc/self/status") {
+        for line in s.lines() {
+            if let Some(v) = line.strip_prefix("VmRSS:") {
+                rss = v
+                    .trim()
+                    .trim_end_matches("kB")
+                    .trim()
+                    .parse::<u64>()
+                    .unwrap_or(0)
+                    * 1024;
+                break;
+            }
+        }
+    }
+    let mut cpu_ms = 0u64;
+    if let Ok(s) = std::fs::read_to_string("/proc/self/stat") {
+        // comm field may contain spaces/parens — fields after the last ')'
+        if let Some(rest) = s.rfind(')').map(|i| &s[i + 1..]) {
+            let f: Vec<&str> = rest.split_whitespace().collect();
+            if f.len() >= 13 {
+                // utime = field 14, stime = 15 → indices 11, 12 after state;
+                // CLK_TCK = 100 on Linux/Android → 10 ms per tick
+                let ut: u64 = f[11].parse().unwrap_or(0);
+                let st: u64 = f[12].parse().unwrap_or(0);
+                cpu_ms = (ut + st) * 10;
+            }
+        }
+    }
+    let (cache_bytes, cache_entries) = RESP
+        .get()
+        .and_then(|c| c.lock().ok().map(|g| (g.bytes, g.map.len())))
+        .unwrap_or((0, 0));
+    Json(StatsResp {
+        rss,
+        cpu_ms,
+        uptime_s: START.get().map(|t| t.elapsed().as_secs()).unwrap_or(0),
+        reqs: REQ.load(Ordering::Relaxed),
+        cache_bytes,
+        cache_entries,
+    })
 }
 
 async fn index() -> Html<&'static str> {
