@@ -215,7 +215,9 @@ fn parse(q: &str) -> Parsed {
 }
 
 /// every blob under `commit`, flat and sorted; trees only — no blob loads,
-/// so building git.git's ~45k-entry index is a tree walk, nothing more
+/// so building git.git's ~45k-entry index is a tree walk, nothing more.
+/// One reusable path buffer per level (no per-entry prefix clone) and
+/// incremental char masks: child_mask = parent_mask | mask_of(filename).
 fn index_of(mirror: &Path, repo: &gix::Repository, commit: gix::ObjectId) -> Result<Arc<RefIndex>> {
     let cache = IDX.get_or_init(Default::default);
     let key = (mirror.to_path_buf(), commit);
@@ -230,22 +232,31 @@ fn index_of(mirror: &Path, repo: &gix::Repository, commit: gix::ObjectId) -> Res
         .context("search target is not a commit")?
         .tree()?;
     let mut ents = Vec::new();
-    let mut stack: Vec<(gix::Tree<'_>, Vec<u8>)> = vec![(root, Vec::new())];
-    while let Some((tree, prefix)) = stack.pop() {
+    // (tree, parent_path, parent_mask) — only tree recursion stores a path
+    let mut stack: Vec<(gix::Tree<'_>, Vec<u8>, u64)> = vec![(root, Vec::new(), 0)];
+    let mut path = Vec::with_capacity(256);
+    while let Some((tree, prefix, parent_mask)) = stack.pop() {
+        path.clear();
+        path.extend_from_slice(&prefix);
+        let prefix_len = path.len();
         for entry in tree.iter() {
             let entry = entry?;
             let mode = entry.mode();
-            let mut path = prefix.clone();
-            if !path.is_empty() {
+            path.truncate(prefix_len);
+            if prefix_len > 0 {
                 path.push(b'/');
             }
-            path.extend_from_slice(entry.filename().as_bytes());
+            let name = entry.filename().as_bytes();
+            path.extend_from_slice(name);
+            let mut mask = parent_mask | mask_of(name);
+            if prefix_len > 0 {
+                mask |= char_bit(b'/');
+            }
             if mode.is_tree() {
-                stack.push((entry.object()?.try_into_tree()?, path));
+                stack.push((entry.object()?.try_into_tree()?, path.clone(), mask));
             } else if mode.is_blob() {
-                let mask = mask_of(&path);
                 ents.push(Ent {
-                    path,
+                    path: path.clone(),
                     blob: entry.object_id(),
                     mask,
                 });
@@ -262,6 +273,12 @@ fn index_of(mirror: &Path, repo: &gix::Repository, commit: gix::ObjectId) -> Res
         g.insert(key, ix.clone());
     }
     Ok(ix)
+}
+
+/// Build the path index for `commit` if not cached — called from boot
+/// prewarm so the first search skips the tree walk.
+pub fn prewarm_index(mirror: &Path, repo: &gix::Repository, commit: gix::ObjectId) {
+    let _ = index_of(mirror, repo, commit);
 }
 
 pub fn search(mirror: &PathBuf, refspec: &str, q: &str) -> Result<SearchResp> {
@@ -323,58 +340,105 @@ pub fn search(mirror: &PathBuf, refspec: &str, q: &str) -> Result<SearchResp> {
 
     let mut matches = Vec::new();
     let mut truncated = false;
+    let mut grep_files = 0usize;
     if !p.greps.is_empty() || !p.neg_greps.is_empty() {
         let deadline = t0 + GREP_BUDGET;
-        'outer: for e in cand.iter() {
-            if Instant::now() > deadline {
-                truncated = true;
-                break;
-            }
-            let Ok(blob) = repo.find_blob(e.blob) else {
-                continue;
-            };
-            let data: &[u8] = blob.data.as_bytes();
-            if data.len() as u64 > MAX_FILE || data.iter().take(8192).any(|&b| b == 0) {
-                continue;
-            }
-            if p.neg_greps.iter().any(|g| contains_ci(data, g)) {
-                continue;
-            }
-            let mut per = 0usize;
-            for (li, line) in data.split(|&b| b == b'\n').enumerate() {
-                if !p.greps.iter().all(|g| contains_ci(line, g)) {
-                    continue;
-                }
-                if per < MAX_HITS_PER_FILE && matches.len() < MAX_HITS_OUT {
-                    let text = String::from_utf8_lossy(line);
-                    let text = text.trim();
-                    let text: String = if text.len() > 240 {
-                        let mut end = 240;
-                        while end > 0 && !text.is_char_boundary(end) {
-                            end -= 1;
-                        }
-                        format!("{}…", &text[..end])
-                    } else {
-                        text.to_string()
+        let deadline_hit = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let n_threads = crate::repo::n_threads().min(cand.len()).max(1);
+        let chunk = cand.len().div_ceil(n_threads).max(1);
+        let tsr = crate::repo::get(mirror)?;
+        let mut handles = Vec::new();
+        for start in (0..cand.len()).step_by(chunk) {
+            let end = (start + chunk).min(cand.len());
+            let tsr = tsr.clone();
+            let greps = p.greps.clone();
+            let neg_greps = p.neg_greps.clone();
+            let cand_chunk: Vec<(Vec<u8>, gix::ObjectId)> = cand[start..end]
+                .iter()
+                .map(|e| (e.path.clone(), e.blob))
+                .collect();
+            let deadline_hit = deadline_hit.clone();
+            handles.push(std::thread::spawn(move || {
+                let repo = crate::repo::handle(&tsr);
+                let mut out: Vec<LineHit> = Vec::new();
+                let mut local_truncated = false;
+                let mut matched = 0usize;
+                for (path, blob_id) in cand_chunk {
+                    if deadline_hit.load(std::sync::atomic::Ordering::Relaxed) {
+                        local_truncated = true;
+                        break;
+                    }
+                    if Instant::now() > deadline {
+                        deadline_hit.store(true, std::sync::atomic::Ordering::Relaxed);
+                        local_truncated = true;
+                        break;
+                    }
+                    let Ok(blob) = repo.find_blob(blob_id) else {
+                        continue;
                     };
-                    matches.push(LineHit {
-                        path: String::from_utf8_lossy(&e.path).into_owned(),
-                        line: li + 1,
-                        text,
-                    });
-                    per += 1;
+                    let data: &[u8] = blob.data.as_bytes();
+                    if data.len() as u64 > MAX_FILE || data.iter().take(8192).any(|&b| b == 0) {
+                        continue;
+                    }
+                    if neg_greps.iter().any(|g| contains_ci(data, g)) {
+                        continue;
+                    }
+                    let mut per = 0usize;
+                    let mut file_hit = false;
+                    for (li, line) in data.split(|&b| b == b'\n').enumerate() {
+                        if !greps.iter().all(|g| contains_ci(line, g)) {
+                            continue;
+                        }
+                        file_hit = true;
+                        if per < MAX_HITS_PER_FILE && out.len() < MAX_HITS_OUT {
+                            let text = String::from_utf8_lossy(line);
+                            let text = text.trim();
+                            let text: String = if text.len() > 240 {
+                                let mut end = 240;
+                                while end > 0 && !text.is_char_boundary(end) {
+                                    end -= 1;
+                                }
+                                format!("{}…", &text[..end])
+                            } else {
+                                text.to_string()
+                            };
+                            out.push(LineHit {
+                                path: String::from_utf8_lossy(&path).into_owned(),
+                                line: li + 1,
+                                text,
+                            });
+                            per += 1;
+                        }
+                        if out.len() >= MAX_HITS_OUT {
+                            local_truncated = true;
+                            break;
+                        }
+                    }
+                    if file_hit {
+                        matched += 1;
+                    }
                 }
-                if matches.len() >= MAX_HITS_OUT {
-                    truncated = true;
-                    break 'outer;
-                }
-            }
+                (out, local_truncated, matched)
+            }));
+        }
+        for h in handles {
+            let (part, t, m) = h
+                .join()
+                .map_err(|_| anyhow::anyhow!("grep worker panicked"))
+                .unwrap_or_default();
+            matches.extend(part);
+            truncated |= t;
+            grep_files += m;
+        }
+        if matches.len() > MAX_HITS_OUT {
+            matches.truncate(MAX_HITS_OUT);
+            truncated = true;
         }
     }
 
     Ok(SearchResp {
         took_ms: t0.elapsed().as_millis(),
-        files: files_total,
+        files: if files_total == 0 { grep_files } else { files_total },
         shown: files.len(),
         hits: files,
         matches,

@@ -224,10 +224,18 @@ async fn sync_repo(Json(req): Json<SyncReq>) -> Result<Json<SyncResp>, (StatusCo
 #[derive(Serialize)]
 struct RefsResp {
     refs: Vec<diff::RefInfo>,
+    took_ms: u128,
+}
+
+#[derive(Deserialize)]
+struct RefsQuery {
+    /// `fresh=1` skips the in-memory response cache (measurement / CI).
+    fresh: Option<String>,
 }
 
 async fn refs(
     Path((owner, repo)): Path<(String, String)>,
+    Query(q): Query<RefsQuery>,
 ) -> Result<Response, (StatusCode, String)> {
     let r = mirror::RepoRef {
         owner,
@@ -235,12 +243,19 @@ async fn refs(
     };
     let path = mirror::mirror_path(&r);
     let key = resp_key(&path, "refs");
-    if let Some(b) = resp_get(&key) {
-        return Ok(json_body(b));
+    if q.fresh.as_deref() != Some("1") {
+        if let Some(b) = resp_get(&key) {
+            return Ok(json_body(b));
+        }
     }
     let body = tokio::task::spawn_blocking(move || {
+        let t0 = std::time::Instant::now();
         let refs = diff::refs(&path)?;
-        serde_json::to_vec(&RefsResp { refs }).map_err(anyhow::Error::from)
+        serde_json::to_vec(&RefsResp {
+            refs,
+            took_ms: t0.elapsed().as_millis(),
+        })
+        .map_err(anyhow::Error::from)
     })
     .await
     .map_err(|e| api_err(e.into()))?
@@ -260,6 +275,8 @@ struct CommitsQuery {
     /// `count=1` → {"count": N} total reachable commits (separate cached
     /// pass; list never blocks on it)
     count: Option<String>,
+    /// `fresh=1` skips the in-memory response cache (measurement / CI).
+    fresh: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -270,6 +287,7 @@ struct CommitsResp {
 #[derive(Serialize)]
 struct CountResp {
     count: usize,
+    took_ms: u128,
 }
 
 async fn commits(
@@ -279,17 +297,25 @@ async fn commits(
     let r = mirror::RepoRef { owner, name: repo };
     let path = mirror::mirror_path(&r);
     let refspec = q.r#ref.clone();
+    let fresh = q.fresh.as_deref() == Some("1");
     if q.count.as_deref() == Some("1") {
         let key = resp_key(
             &path,
             &format!("commits_count\0{}", refspec.as_deref().unwrap_or("")),
         );
-        if let Some(b) = resp_get(&key) {
-            return Ok(json_body(b));
+        if !fresh {
+            if let Some(b) = resp_get(&key) {
+                return Ok(json_body(b));
+            }
         }
         let body = tokio::task::spawn_blocking(move || {
+            let t0 = std::time::Instant::now();
             let count = diff::commit_count(&path, refspec.as_deref())?;
-            serde_json::to_vec(&CountResp { count }).map_err(anyhow::Error::from)
+            serde_json::to_vec(&CountResp {
+                count,
+                took_ms: t0.elapsed().as_millis(),
+            })
+            .map_err(anyhow::Error::from)
         })
         .await
         .map_err(|e| api_err(e.into()))?
@@ -389,6 +415,8 @@ async fn file_diff(
 struct SearchQuery {
     r#ref: Option<String>,
     q: String,
+    /// `fresh=1` skips the in-memory response cache (measurement / CI).
+    fresh: Option<String>,
 }
 
 async fn search(
@@ -399,8 +427,10 @@ async fn search(
     let path = mirror::mirror_path(&r);
     let refspec = q.r#ref.clone().unwrap_or_else(|| "HEAD".to_string());
     let key = resp_key(&path, &format!("search\0{refspec}\0{}", q.q));
-    if let Some(b) = resp_get(&key) {
-        return Ok(json_body(b));
+    if q.fresh.as_deref() != Some("1") {
+        if let Some(b) = resp_get(&key) {
+            return Ok(json_body(b));
+        }
     }
     let query = q.q.clone();
     let body = tokio::task::spawn_blocking(move || {

@@ -6,6 +6,44 @@ use std::sync::Arc;
 
 const PERCENTAGE: f32 = 0.5;
 const RENAME_LIMIT: usize = 32767;
+/// multiset pre-filter threshold: lower than PERCENTAGE so we never skip a
+/// pair that Myers could have scored ≥ PERCENTAGE (conservative recall)
+const PRE_FILTER: f32 = PERCENTAGE * 0.6;
+
+fn line_hashes(data: &[u8]) -> Vec<u64> {
+    use std::hash::{Hash, Hasher};
+    data.split(|&b| b == b'\n')
+        .filter(|l| !l.is_empty())
+        .map(|l| {
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            l.hash(&mut h);
+            h.finish()
+        })
+        .collect()
+}
+
+fn multiset_similarity(a: &[u64], b: &[u64]) -> f32 {
+    if a.is_empty() && b.is_empty() {
+        return 1.0;
+    }
+    if a.is_empty() || b.is_empty() {
+        return 0.0;
+    }
+    let mut counts: HashMap<u64, i32> = HashMap::with_capacity(a.len());
+    for &h in a {
+        *counts.entry(h).or_default() += 1;
+    }
+    let mut matches = 0usize;
+    for &h in b {
+        if let Some(c) = counts.get_mut(&h) {
+            if *c > 0 {
+                *c -= 1;
+                matches += 1;
+            }
+        }
+    }
+    2.0 * matches as f32 / (a.len() + b.len()) as f32
+}
 
 struct Item {
     change_idx: usize,
@@ -92,6 +130,29 @@ fn score_part(
     let mut src_ids: HashMap<usize, Vec<imara_diff::intern::Token>> = HashMap::new();
     let mut out: Vec<(usize, usize, f32)> = Vec::new();
 
+    // pre-compute line hashes for multiset pre-filter: skip Myers for pairs
+    // that clearly can't reach 50% similarity
+    let mut dest_hashes: HashMap<usize, Vec<u64>> = HashMap::new();
+    let mut src_hashes: HashMap<usize, Vec<u64>> = HashMap::new();
+    for (di, did, dmode) in &part {
+        if dmode.is_blob() {
+            if let Some((bytes, bin)) = blobs.get(did) {
+                if !bin {
+                    dest_hashes.insert(*di, line_hashes(bytes));
+                }
+            }
+        }
+    }
+    for (si, sid, smode) in srcs.iter() {
+        if smode.is_blob() {
+            if let Some((bytes, bin)) = blobs.get(sid) {
+                if !bin {
+                    src_hashes.insert(*si, line_hashes(bytes));
+                }
+            }
+        }
+    }
+
     for (di, did, dmode) in &part {
         if !dmode.is_blob() {
             continue;
@@ -109,6 +170,12 @@ fn score_part(
             }
             if same_dir_only && dirs[*si] != dirs[*di] {
                 continue;
+            }
+            // multiset pre-filter: skip Myers for pairs with low line overlap
+            if let (Some(dh), Some(sh)) = (dest_hashes.get(di), src_hashes.get(si)) {
+                if multiset_similarity(dh, sh) < PRE_FILTER {
+                    continue;
+                }
             }
             let Some((sbytes, sbin)) = blobs.get(sid) else {
                 continue;
@@ -152,6 +219,14 @@ pub fn detect(
     changes: &mut Vec<(usize, Change)>,
 ) -> anyhow::Result<()> {
     let t0 = std::time::Instant::now();
+
+    // early exit: no additions or no deletions means no rename possible
+    let has_add = changes.iter().any(|(_, c)| matches!(c, Change::Addition { .. }));
+    let has_del = changes.iter().any(|(_, c)| matches!(c, Change::Deletion { .. }));
+    if !has_add || !has_del {
+        crate::debug!("renames: skipped (no {} side)", if !has_add { "addition" } else { "deletion" });
+        return Ok(());
+    }
 
     let mut items: Vec<Item> = Vec::new();
     for (i, (_, change)) in changes.iter().enumerate() {
@@ -233,9 +308,9 @@ pub fn detect(
         let srcs = Arc::new(srcs);
         let dirs: Arc<Vec<gix::bstr::BString>> =
             Arc::new(items.iter().map(|it| dir_of(&it.path).into()).collect());
-        // rename scoring caps at 8: A/B on 8c/16t — 16 threads regressed
-        // 60→76 ms (memory-bound blob loads, SMT contention), while stats
-        // fill wants every thread (stress 88→54 ms). Split caps.
+        // rename scoring caps at 8: more threads regressed scoring (60→76 ms
+        // measured — memory-bound blob loads, SMT contention), while stats
+        // fill scales with every thread. Split caps.
         let n_threads = crate::repo::n_threads().min(8).min(dests.len());
 
         let mut fuzzy: Vec<(usize, usize, f32)> = Vec::new();

@@ -7,9 +7,9 @@ type RepoMap = std::collections::HashMap<PathBuf, Arc<gix::ThreadSafeRepository>
 
 /// Per-mirror blob memo: warm requests skip pack lookup + inflate entirely.
 ///
-/// Sharded 16-way (power of two → mask in `shard_idx`): one global mutex
-/// serialized all workers; now each shard locks itself and overflow clears
-/// only that shard. Evicted wholesale for a mirror on its pull (`invalidate`).
+/// Sharded 16-way (power of two → mask in `shard_idx`): each shard locks
+/// itself and overflow clears only that shard. Evicted wholesale for a mirror
+/// on its pull (`invalidate`).
 const BLOB_CACHE_CAP: usize = 64 << 20;
 const BLOB_SHARDS: usize = 16;
 struct BlobShard {
@@ -84,7 +84,7 @@ pub fn handle(tsr: &gix::ThreadSafeRepository) -> gix::Repository {
 /// Worker cap for parallel stats/scoring: CPU count, probed once
 /// (`available_parallelism` is a syscall per call), clamped to 16.
 /// Rename scoring tightens this further — see rewrite.rs.
-/// Override for A/B: `XLR8_THREADS=N`.
+/// Override: `XLR8_THREADS=N`.
 pub fn n_threads() -> usize {
     static N: OnceLock<usize> = OnceLock::new();
     *N.get_or_init(|| {

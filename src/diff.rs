@@ -697,27 +697,51 @@ pub fn commits(
     // stats=1 second pass: per-commit +/−, all commits flattened into one
     // parallel fill_stats batch; merge commits diff vs their first parent
     // (GitHub-style). Not computed in the plain list call — that path stays
-    // a ~20 ms walk.
+    // a ~20 ms walk. Tree-diff + rename detection runs in parallel per commit.
     if want_stats && !out.is_empty() {
+        let n_ids = ids.len();
+        let n_threads = crate::repo::n_threads().min(n_ids).max(1);
+        let chunk = n_ids.div_ceil(n_threads).max(1);
+        let ids_arc = std::sync::Arc::new(ids);
+        let parents_arc = std::sync::Arc::new(parents);
         let mut all: Vec<(usize, Change)> = Vec::new();
-        for (i, id) in ids.iter().enumerate() {
-            let head = repo.find_object(*id)?.try_into_commit()?;
-            let head_tree = head.tree()?;
-            let parent_tree = match parents[i] {
-                Some(pid) => Some(repo.find_object(pid)?.try_into_commit()?.tree()?),
-                None => None, // root commit: diff vs the empty tree
-            };
-            let mut ch: Vec<(usize, Change)> = repo
-                .diff_tree_to_tree(
-                    parent_tree.as_ref(),
-                    Some(&head_tree),
-                    gix::diff::Options::default(),
-                )?
-                .into_iter()
-                .enumerate()
-                .collect();
-            crate::rewrite::detect(&tsr, mirror, &mut ch)?;
-            all.extend(ch.into_iter().map(|(_, c)| (i, c)));
+        let mut handles = Vec::new();
+        for start in (0..n_ids).step_by(chunk) {
+            let end = (start + chunk).min(n_ids);
+            let tsr = tsr.clone();
+            let mirror = mirror.clone();
+            let ids_c = ids_arc.clone();
+            let parents_c = parents_arc.clone();
+            handles.push(std::thread::spawn(move || {
+                let repo = crate::repo::handle(&tsr);
+                let mut part: Vec<(usize, Change)> = Vec::new();
+                for i in start..end {
+                    let head = repo.find_object(ids_c[i])?.try_into_commit()?;
+                    let head_tree = head.tree()?;
+                    let parent_tree = match parents_c[i] {
+                        Some(pid) => Some(repo.find_object(pid)?.try_into_commit()?.tree()?),
+                        None => None,
+                    };
+                    let mut ch: Vec<(usize, Change)> = repo
+                        .diff_tree_to_tree(
+                            parent_tree.as_ref(),
+                            Some(&head_tree),
+                            gix::diff::Options::default(),
+                        )?
+                        .into_iter()
+                        .enumerate()
+                        .collect();
+                    crate::rewrite::detect(&tsr, &mirror, &mut ch)?;
+                    part.extend(ch.into_iter().map(|(_, c)| (i, c)));
+                }
+                anyhow::Ok(part)
+            }));
+        }
+        for h in handles {
+            let part = h
+                .join()
+                .map_err(|_| anyhow::anyhow!("commit-stats worker panicked"))??;
+            all.extend(part);
         }
         let collected = fill_stats(mirror, &tsr, all)?;
         let mut acc: Vec<(u32, u32)> = vec![(0, 0); out.len()];
@@ -735,14 +759,78 @@ pub fn commits(
 
 /// `rev-list --count`: every commit reachable from ref — same graph the
 /// paginated walk enumerates, so page total = ceil(count / limit).
+///
+/// On-disk cache: file format `XLR8CNT1 <key_hash> <count> <checksum>` where
+/// key_hash = hash(all refs sorted + HEAD tip + binary version) and
+/// checksum  = hash(magic|version|key_hash|count). Atomic write via
+/// temp+rename. Any mismatch (magic, version, key, checksum, parse) →
+/// ignore file and recompute. Keying on ALL refs means a force-push, sync,
+/// or deleted tag changes the key → automatic invalidation.
+const CNT_MAGIC: &str = "XLR8CNT1";
+
+fn hash_hex(s: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    s.hash(&mut h);
+    format!("{:016x}", h.finish())
+}
+
+/// fingerprint of the mirror state this count is valid for
+fn count_key(repo: &gix::Repository, spec: &str) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if let Ok(refs) = repo.references() {
+        if let Ok(all) = refs.all() {
+            for r in all.flatten() {
+                let name = String::from_utf8_lossy(r.name().as_bstr().as_bytes()).into_owned();
+                let id = r.id().detach().to_string();
+                parts.push(format!("{name}={id}"));
+            }
+        }
+    }
+    parts.sort();
+    if let Ok(head) = repo.head_id() {
+        parts.push(format!("HEAD={}", head.detach()));
+    }
+    parts.push(format!("BIN={}", env!("CARGO_PKG_VERSION")));
+    parts.push(format!("SPEC={spec}"));
+    hash_hex(&parts.join("\n"))
+}
+
 pub fn commit_count(mirror: &PathBuf, refspec: Option<&str>) -> Result<usize> {
     let tsr = crate::repo::get(mirror)?;
     let repo = crate::repo::handle(&tsr);
-    let root = commit_of(&repo, refspec.unwrap_or("HEAD"))?;
+    let spec = refspec.unwrap_or("HEAD");
+    let root = commit_of(&repo, spec)?;
+    let tip = root.id().detach();
+
+    let cache_root = crate::mirror::cache_dir().join("mirrors").join("count-cache");
+    let slug = mirror
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let cache_dir = cache_root.join(slug);
+    let key_hash = count_key(&repo, spec);
+    let cache_file = cache_dir.join(&key_hash);
+
+    // valid hit only if magic+version+key+checksum all match
+    if let Ok(s) = std::fs::read_to_string(&cache_file) {
+        let tok: Vec<&str> = s.split_whitespace().collect();
+        if tok.len() == 4 && tok[0] == CNT_MAGIC && tok[1] == key_hash {
+            if let Ok(n) = tok[2].parse::<usize>() {
+                let recomputed = hash_hex(&format!("{CNT_MAGIC}|{key_hash}|{n}|1"));
+                if tok[3] == recomputed {
+                    return Ok(n);
+                }
+            }
+        }
+        // any mismatch → fall through and recompute (also cleans bad file)
+        let _ = std::fs::remove_file(&cache_file);
+    }
+
     let mut seen = std::collections::HashSet::new();
     let mut heap: std::collections::BinaryHeap<(i64, gix::ObjectId)> =
         std::collections::BinaryHeap::new();
-    let root_id = root.id().detach();
+    let root_id = tip;
     seen.insert(root_id);
     heap.push((root.time().map(|t| t.seconds).unwrap_or(0), root_id));
     let mut n = 0usize;
@@ -762,6 +850,16 @@ pub fn commit_count(mirror: &PathBuf, refspec: Option<&str>) -> Result<usize> {
                 heap.push((parent.time().map(|t| t.seconds).unwrap_or(0), pid));
             }
         }
+    }
+
+    // atomic persist: temp + rename; checksum covers magic|key|count|format-ver
+    let _ = std::fs::create_dir_all(&cache_dir);
+    let ver = "1";
+    let checksum = hash_hex(&format!("{CNT_MAGIC}|{key_hash}|{n}|{ver}"));
+    let payload = format!("{CNT_MAGIC} {key_hash} {n} {checksum}\n");
+    let tmp = cache_dir.join(format!(".{}.tmp.{}", key_hash, std::process::id()));
+    if std::fs::write(&tmp, payload).is_ok() {
+        let _ = std::fs::rename(&tmp, &cache_file);
     }
     Ok(n)
 }
@@ -790,27 +888,75 @@ pub fn refs(mirror: &PathBuf) -> Result<Vec<RefInfo>> {
         }
     }
     let tsr = crate::repo::get(mirror)?;
-    let repo = crate::repo::handle(&tsr);
-    let mut seen: HashMap<String, String> = HashMap::new();
-    for r in repo.references()?.all()? {
-        let Ok(r) = r else {
-            continue;
-        };
-        let full = String::from_utf8_lossy(r.name().as_bstr().as_bytes()).to_string();
-        let short = full
-            .trim_start_matches("refs/heads/")
-            .trim_start_matches("refs/tags/")
-            .to_string();
-        if short != full {
-            if let Ok(id) = r.into_fully_peeled_id() {
-                seen.insert(short, id.to_string());
+    // collect short-name → unpeeled id first (cheap), peel in parallel.
+    // HashMap last-wins matches the original dedup when a branch+tag share a short name.
+    let mut raw: Vec<(String, gix::ObjectId)> = Vec::new();
+    {
+        let repo = crate::repo::handle(&tsr);
+        for r in repo.references()?.all()? {
+            let Ok(r) = r else {
+                continue;
+            };
+            let full = String::from_utf8_lossy(r.name().as_bstr().as_bytes()).to_string();
+            let short = full
+                .trim_start_matches("refs/heads/")
+                .trim_start_matches("refs/tags/")
+                .to_string();
+            if short != full {
+                raw.push((short, r.id().detach()));
             }
         }
     }
-    let mut v: Vec<RefInfo> = seen
-        .into_iter()
-        .map(|(name, id)| RefInfo { name, id })
-        .collect();
+    // dedup by short name, last occurrence wins (same as HashMap insert order)
+    {
+        let mut order: Vec<String> = Vec::with_capacity(raw.len());
+        let mut last: HashMap<String, gix::ObjectId> = HashMap::with_capacity(raw.len());
+        for (short, id) in raw {
+            if !last.contains_key(&short) {
+                order.push(short.clone());
+            }
+            last.insert(short, id);
+        }
+        raw = order.into_iter().filter_map(|s| last.get(&s).map(|id| (s, *id))).collect();
+    }
+    let n_threads = crate::repo::n_threads().min(raw.len()).max(1);
+    let chunk = raw.len().div_ceil(n_threads).max(1);
+    let mut handles = Vec::new();
+    for c in raw.chunks(chunk) {
+        let c: Vec<(String, gix::ObjectId)> = c.to_vec();
+        let tsr = tsr.clone();
+        handles.push(std::thread::spawn(move || {
+            let repo = crate::repo::handle(&tsr);
+            let mut out = Vec::with_capacity(c.len());
+            for (short, id) in c {
+                // peel tags → first non-tag object of any kind (blob tags like
+                // GPG keys are valid refs; into_fully_peeled_id did the same)
+                if let Ok(obj) = repo.find_object(id) {
+                    let mut cur = obj;
+                    while cur.kind == gix::object::Kind::Tag {
+                        match cur.to_tag_ref_iter().target_id() {
+                            Ok(tid) => match repo.find_object(tid) {
+                                Ok(next) => cur = next,
+                                Err(_) => break,
+                            },
+                            Err(_) => break,
+                        }
+                    }
+                    out.push(RefInfo {
+                        name: short,
+                        id: cur.id().to_string(),
+                    });
+                }
+            }
+            out
+        }));
+    }
+    let mut v: Vec<RefInfo> = Vec::with_capacity(raw.len());
+    for h in handles {
+        if let Ok(part) = h.join() {
+            v.extend(part);
+        }
+    }
     v.sort_by(|a, b| a.name.cmp(&b.name));
     if let Ok(mut m) = cache.write() {
         m.insert(mirror.clone(), v.clone());

@@ -156,6 +156,8 @@
     <div class="toolbar">
       <select id="base-ref"></select><span class="muted">...</span><select id="head-ref"></select>
       <button id="diff-btn">diff</button>
+      <input id="diff-find" type="search" placeholder="find in diff" style="width:140px" />
+      <input id="diff-filter" type="search" placeholder="filter files" style="width:130px" />
       <span class="muted" id="diff-info"></span>
     </div>
     <div id="diff-summary"></div>
@@ -530,29 +532,138 @@ async function doSearch() {
 $("#search-q").addEventListener("input", () => { clearTimeout(searchDeb); searchDeb = setTimeout(doSearch, 250); });
 $("#search-ref").onchange = doSearch;
 
-$("#diff-btn").onclick = async () => {
-  const base = $("#base-ref").value, head = $("#head-ref").value;
-  $("#diff-info").textContent = "computing…";
-  const t0 = performance.now();
-  try {
-    const s = await api(`/api/${repo}/diff?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
-    $("#diff-info").textContent = `${s.files.length} files  +${s.total_additions} −${s.total_deletions}  (${Math.round(performance.now()-t0)}ms)`;
-    diffBase = base; diffHead = head;
-    vclose($("#diff-summary"));
-    const tot = s.total_additions + s.total_deletions || 1;
-    const share = Math.round(s.total_additions / tot * 12);
-    $("#diff-summary").innerHTML =
-      `<div class="fig" data-title="[ CHANGES ]">${escapeHtml(base)} → ${escapeHtml(head)}<br>
-        <span class="a">+${s.total_additions}</span> <span class="d">−${s.total_deletions}</span>
-        · ${s.files.length} files · add [${"=".repeat(share)}${"-".repeat(12 - share)}]<br>
-        <span class="muted">computed ${Math.round(performance.now() - t0)} ms · click a file to expand</span></div>` +
-      s.files.map(f => `
+// ---- in-app find (Ctrl+F) across virtualized diff rows ---------------------
+let diffFilesCache = [];
+let findMatches = [], findIdx = -1, findTerm = "";
+function renderDiffFiles(files) {
+  diffFilesCache = files;
+  const filter = $("#diff-filter").value.trim().toLowerCase();
+  const shown = filter ? files.filter(f => f.path.toLowerCase().includes(filter)) : files;
+  $("#diff-summary").querySelectorAll(".card").forEach(el => el.remove());
+  const html = shown.map(f => `
       <div class="card"><div class="card-h" data-path="${escapeAttr(f.path)}" data-opath="${escapeAttr(f.old_path || "")}">
         <span class="status ${f.status}">${f.status}</span>
         <span>${escapeHtml(f.path)}</span>
         ${f.old_path && f.old_path !== f.path ? `<span class="muted">← ${escapeHtml(f.old_path)}</span>` : ""}
         <span class="stat">${f.binary ? '<span class="muted">binary</span>' : `<span class="a">+${f.additions}</span> <span class="d">−${f.deletions}</span>`}</span>
       </div></div>`).join("");
+  $("#diff-summary").insertAdjacentHTML("beforeend", html);
+}
+$("#diff-filter").addEventListener("input", () => {
+  if (diffFilesCache.length) renderDiffFiles(diffFilesCache);
+});
+function diffFind(q) {
+  findMatches = []; findIdx = -1; findTerm = q.toLowerCase();
+  if (!findTerm) { $("#diff-info").textContent = diffInfoLast; return; }
+  for (let vi = 0; vi < VREG.length; vi++) {
+    const e = VREG[vi];
+    if (!e || !e.rows) continue;
+    for (let ri = 0; ri < e.rows.length; ri++) {
+      const r = e.rows[ri];
+      if (r[0] !== "h" && r[0] !== "g" && String(r[3]).toLowerCase().includes(findTerm)) {
+        findMatches.push({ vi, ri });
+      }
+    }
+  }
+  if (findMatches.length) {
+    findIdx = 0;
+    jumpToMatch();
+  } else {
+    $("#diff-info").textContent = "no matches";
+  }
+}
+function jumpToMatch() {
+  if (findIdx < 0 || findIdx >= findMatches.length) return;
+  const m = findMatches[findIdx];
+  const e = VREG[m.vi];
+  if (!e || !e.tops) return;
+  // scroll so the match is centered
+  const box = document.querySelector(`.vlines[data-v="${m.vi}"]`);
+  if (box) {
+    voff(box);
+    const target = box._off + e.tops[m.ri] - innerHeight / 2 + 11;
+    scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+  }
+  $("#diff-info").textContent = `match ${findIdx + 1}/${findMatches.length}`;
+}
+$("#diff-find").addEventListener("input", () => {
+  clearTimeout(window._findDeb);
+  window._findDeb = setTimeout(() => diffFind($("#diff-find").value.trim()), 200);
+});
+$("#diff-find").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (findMatches.length) {
+      findIdx = e.shiftKey ? (findIdx - 1 + findMatches.length) % findMatches.length
+                           : (findIdx + 1) % findMatches.length;
+      jumpToMatch();
+    }
+  }
+  if (e.key === "Escape") { $("#diff-find").value = ""; diffFind(""); }
+});
+// Ctrl+F focuses the in-app find when the compare tab is visible
+addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+    const cmp = $("#tab-compare");
+    if (cmp && cmp.style.display !== "none") {
+      e.preventDefault();
+      $("#diff-find").focus();
+      $("#diff-find").select();
+    }
+    return;
+  }
+  // don't hijack keys while typing in inputs
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
+  // / focuses the file filter in compare view
+  if (e.key === "/" && $("#tab-compare").style.display !== "none") {
+    e.preventDefault();
+    $("#diff-filter").focus();
+    $("#diff-filter").select();
+    return;
+  }
+  // tab shortcuts: 1=commits 2=compare 3=search 4=pulls
+  const tabMap = { "1": "commits", "2": "compare", "3": "search", "4": "pulls" };
+  if (tabMap[e.key]) {
+    document.querySelector(`nav button[data-tab="${tabMap[e.key]}"]`).click();
+    return;
+  }
+  // j/k: expand/collapse next/prev file card in compare view
+  if ((e.key === "j" || e.key === "k") && $("#tab-compare").style.display !== "none") {
+    const cards = [...document.querySelectorAll("#diff-summary .card-h[data-path]")];
+    if (!cards.length) return;
+    e.preventDefault();
+    const openIdx = cards.findIndex(c => c.parentElement.classList.contains("open"));
+    const next = e.key === "j"
+      ? (openIdx < cards.length - 1 ? openIdx + 1 : 0)
+      : (openIdx > 0 ? openIdx - 1 : cards.length - 1);
+    // close current open file
+    const cur = document.querySelector("#diff-summary .card.open .file-body");
+    if (cur) { vclose(cur); cur.remove(); cur.parentElement.classList.remove("open"); }
+    toggleFile(cards[next]);
+    cards[next].scrollIntoView({ block: "nearest" });
+  }
+});
+let diffInfoLast = "";
+$("#diff-btn").onclick = async () => {
+  const base = $("#base-ref").value, head = $("#head-ref").value;
+  $("#diff-info").textContent = "computing…";
+  const t0 = performance.now();
+  try {
+    const s = await api(`/api/${repo}/diff?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
+    diffInfoLast = `${s.files.length} files  +${s.total_additions} −${s.total_deletions}  (${Math.round(performance.now()-t0)}ms)`;
+    $("#diff-info").textContent = diffInfoLast;
+    diffBase = base; diffHead = head;
+    vclose($("#diff-summary"));
+    $("#diff-filter").value = ""; $("#diff-find").value = "";
+    findMatches = []; findIdx = -1;
+    const tot = s.total_additions + s.total_deletions || 1;
+    const share = Math.round(s.total_additions / tot * 12);
+    $("#diff-summary").innerHTML =
+      `<div class="fig" data-title="[ CHANGES ]">${escapeHtml(base)} → ${escapeHtml(head)}<br>
+        <span class="a">+${s.total_additions}</span> <span class="d">−${s.total_deletions}</span>
+        · ${s.files.length} files · add [${"=".repeat(share)}${"-".repeat(12 - share)}]<br>
+        <span class="muted">computed ${Math.round(performance.now() - t0)} ms · click a file to expand</span></div>`;
+    renderDiffFiles(s.files);
   } catch (e) {
     $("#diff-info").textContent = "";
     toast("diff failed: " + e.message);

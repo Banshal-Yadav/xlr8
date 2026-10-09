@@ -53,10 +53,15 @@ async fn main() -> Result<()> {
     }
 
     // prewarm: open the mirror + read HEAD before serving, so the first
-    // request skips repo open + pack index load (measured ~50 ms on a laptop)
-    for p in &opened {
-        let p = p.clone();
-        tokio::task::spawn_blocking(move || prewarm(&p)).await?;
+    // request skips repo open + pack index load (measured ~50 ms on a laptop).
+    // Only prewarm when a repo was given explicitly on the CLI — `--serve`
+    // with no repo must boot fast and not pay tree-walk + index cost for
+    // every mirror (measured 6 mirrors → +31 MB RSS).
+    if cli.repo.is_some() {
+        for p in &opened {
+            let p = p.clone();
+            tokio::task::spawn_blocking(move || prewarm(&p)).await?;
+        }
     }
 
     let addr = server::serve(state, cli.port).await?;
@@ -73,7 +78,8 @@ async fn main() -> Result<()> {
 
 /// Open the mirror up front (repo handle gets cached in `REPOS`) and touch
 /// HEAD + tree so first-request work — `gix::open`, pack index load, ref
-/// peel — happens at boot instead. Measured ~50 ms off the cold path.
+/// peel — happens at boot instead. Also builds the HEAD search index so the
+/// first `/search` skips its tree walk.
 fn prewarm(path: &std::path::Path) {
     let t = std::time::Instant::now();
     let Ok(tsr) = repo::get(path) else {
@@ -88,6 +94,8 @@ fn prewarm(path: &std::path::Path) {
         for entry in tree.iter() {
             let _ = entry?.mode();
         }
+        // build search path index for HEAD while we're here
+        search::prewarm_index(path, &handle, commit.id().detach());
         Ok(())
     })();
     if let Err(e) = warmed {
