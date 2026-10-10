@@ -38,6 +38,8 @@
     --radius-inputs: 7px;
     --radius-badges: 50px;
     --radius-small: 4px;
+
+    --perf-h: 28px;
   }
 
   * { box-sizing: border-box; }
@@ -45,7 +47,7 @@
     margin: 0;
     background: var(--color-obsidian);
     color: var(--color-bone);
-    padding-bottom: 48px;
+    padding-bottom: 60px;
     font-family: var(--font-sans);
     font-weight: 400;
     font-size: 14px;
@@ -55,6 +57,14 @@
   }
   ::selection { background: var(--color-violet); color: var(--color-ink); }
   :focus-visible { outline: 1px solid var(--color-violet); outline-offset: 2px; }
+
+  /* scrollbars — Warp aesthetic */
+  * { scrollbar-width: thin; scrollbar-color: var(--color-carbon) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--color-carbon); border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-slate-deep); }
+  ::-webkit-scrollbar-corner { background: transparent; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
   }
@@ -159,6 +169,20 @@
   }
   #perf-lat { color: var(--color-bone); font-weight: 600; min-width: 54px; text-align: right; }
 
+  #hscroll {
+    position: fixed;
+    left: 0;
+    bottom: var(--perf-h);
+    height: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: none;
+    z-index: 25;
+    background: var(--color-onyx);
+    border-top: 1px solid var(--color-carbon);
+  }
+  #hscroll > div { height: 1px; }
+
   main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 
   select, input[type="search"] {
@@ -247,8 +271,8 @@
 
   .mono { color: var(--color-ash); font-size: 12px; font-family: var(--font-mono); }
 
-  .vlines { position: relative; overflow-x: auto; background: var(--color-obsidian); }
-  .vlines > * { position: absolute; left: 0; width: max-content; min-width: 100%; }
+  .vlines { position: relative; overflow-x: auto; background: var(--color-onyx); --w: 100%; }
+  .vlines > * { position: absolute; left: 0; width: max-content; min-width: var(--w); }
   .ln { display: flex; white-space: pre; height: 22px; line-height: 22px; font-family: var(--font-mono); font-size: 12px; }
   .ln .n, .ln .n2 {
     width: 48px;
@@ -432,6 +456,7 @@
   <span id="perf-lat">—</span>
   <span id="perf-stats" class="muted"></span>
 </div>
+<div id="hscroll"><div></div></div>
 
 <script>
 let repo = null; // "owner/name"
@@ -940,7 +965,9 @@ function vmount(scope) {
   const box = scope.querySelector(".vlines");
   if (!box) return;
   vboxes.add(box);
+  box.addEventListener("scroll", hsync, { passive: true });
   vshift();
+  hsync();
 }
 function vclose(scope) {
   for (const b of scope.querySelectorAll(".vlines")) {
@@ -948,6 +975,7 @@ function vclose(scope) {
     const e = VREG[b.dataset.v | 0];
     if (e) { e.rows = null; e.tops = null; }
   }
+  hsync();
 }
 function voff(box) { box._off = box.getBoundingClientRect().top + scrollY; }
 function vshift() { vboxes.forEach(voff); vpump(); }
@@ -979,8 +1007,40 @@ function vrow(r, top) {
   return `<div class="ln ${r[0]}" style="top:${top}px">
     <span class="n">${r[1]}</span><span class="n2">${r[2]}</span><span class="t">${escapeHtml(r[3]) || " "}</span></div>`;
 }
-addEventListener("scroll", vpump, { passive: true });
-addEventListener("resize", () => { vboxes.forEach(voff); vpump(); });
+
+// sticky horizontal scrollbar — mirrors the most-visible open diff
+const hscroll = $("#hscroll");
+const hscrollInner = hscroll.firstElementChild;
+let hbox = null;
+function hsync() {
+  let best = null, bestVis = 0;
+  for (const b of vboxes) {
+    const r = b.getBoundingClientRect();
+    const vis = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
+    if (vis > bestVis) { bestVis = vis; best = b; }
+  }
+  if (!best || best.scrollWidth <= best.clientWidth + 1) {
+    if (hbox) { hbox = null; hscroll.style.display = "none"; }
+    return;
+  }
+  hbox = best;
+  hscroll.style.display = "block";
+  const r = best.getBoundingClientRect();
+  hscroll.style.left = r.left + "px";
+  hscroll.style.width = r.width + "px";
+  hscrollInner.style.width = best.scrollWidth + "px";
+  const bmax = best.scrollWidth - best.clientWidth;
+  const smax = hscroll.scrollWidth - hscroll.clientWidth;
+  hscroll.scrollLeft = bmax > 0 ? best.scrollLeft / bmax * smax : 0;
+}
+hscroll.addEventListener("scroll", () => {
+  if (!hbox) return;
+  const bmax = hbox.scrollWidth - hbox.clientWidth;
+  const smax = hscroll.scrollWidth - hscroll.clientWidth;
+  hbox.scrollLeft = smax > 0 ? hscroll.scrollLeft / smax * bmax : 0;
+}, { passive: true });
+addEventListener("scroll", () => { vpump(); hsync(); }, { passive: true });
+addEventListener("resize", () => { vboxes.forEach(voff); vpump(); hsync(); });
 
 function fileBody(fd, path) {
   if (fd.binary) return `<div class="file-meta">${escapeHtml(path)} — binary file</div>`;
@@ -1006,9 +1066,11 @@ function fileBody(fd, path) {
   const tops = new Int32Array(rows.length + 1);
   for (let k = 0; k < rows.length; k++) tops[k + 1] = tops[k] + V_H[rows[k][0] === "h" ? 1 : rows[k][0] === "g" ? 2 : 0];
   const idx = VREG.push({ rows, tops }) - 1;
+  let maxLen = 0;
+  for (const r of rows) if (r[0] !== "h" && r[0] !== "g" && r[3].length > maxLen) maxLen = r[3].length;
   const total = fd.hunks.reduce((s, h) => s + h.lines.length, 0);
   return `<div class="file-meta">${fd.hunks.length} hunks · ${total} lines</div>
-    <div class="vlines" data-v="${idx}" style="height:${tops[rows.length]}px"></div>`;
+    <div class="vlines" data-v="${idx}" style="height:${tops[rows.length]}px;--w:calc(104px + ${maxLen}ch)"></div>`;
 }
 
 async function loadPulls() {

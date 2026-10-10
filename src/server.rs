@@ -129,6 +129,35 @@ struct StatsResp {
 /// Reads /proc only when hit (frontend throttles to ≥2 s) — no hot path
 /// touches it, and nothing is precomputed per request.
 async fn stats() -> Json<StatsResp> {
+    let (rss, cpu_ms) = sys_stats();
+    let (cache_bytes, cache_entries) = RESP
+        .get()
+        .and_then(|c| c.lock().ok().map(|g| (g.bytes, g.map.len())))
+        .unwrap_or((0, 0));
+    let synced_s = SYNCED.load(Ordering::Relaxed);
+    let synced_s = if synced_s == 0 {
+        0
+    } else {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs().saturating_sub(synced_s))
+            .unwrap_or(0)
+    };
+    Json(StatsResp {
+        rss,
+        cpu_ms,
+        uptime_s: START.get().map(|t| t.elapsed().as_secs()).unwrap_or(0),
+        reqs: REQ.load(Ordering::Relaxed),
+        cache_bytes,
+        cache_entries,
+        synced_s,
+    })
+}
+
+/// Resident set size (bytes) and cumulative CPU time (ms) of this process.
+/// Linux/Android read /proc; Windows uses kernel32/psapi via raw FFI (no deps).
+#[cfg(not(windows))]
+fn sys_stats() -> (u64, u64) {
     let mut rss = 0u64;
     if let Ok(s) = std::fs::read_to_string("/proc/self/status") {
         for line in s.lines() {
@@ -158,28 +187,64 @@ async fn stats() -> Json<StatsResp> {
             }
         }
     }
-    let (cache_bytes, cache_entries) = RESP
-        .get()
-        .and_then(|c| c.lock().ok().map(|g| (g.bytes, g.map.len())))
-        .unwrap_or((0, 0));
-    let synced_s = SYNCED.load(Ordering::Relaxed);
-    let synced_s = if synced_s == 0 {
-        0
-    } else {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs().saturating_sub(synced_s))
-            .unwrap_or(0)
-    };
-    Json(StatsResp {
-        rss,
-        cpu_ms,
-        uptime_s: START.get().map(|t| t.elapsed().as_secs()).unwrap_or(0),
-        reqs: REQ.load(Ordering::Relaxed),
-        cache_bytes,
-        cache_entries,
-        synced_s,
-    })
+    (rss, cpu_ms)
+}
+
+#[cfg(windows)]
+fn sys_stats() -> (u64, u64) {
+    use std::mem::{size_of, zeroed};
+
+    #[repr(C)]
+    struct ProcessMemoryCounters {
+        cb: u32,
+        page_fault_count: u32,
+        peak_working_set_size: usize,
+        working_set_size: usize,
+        quota_peak_paged_pool_usage: usize,
+        quota_paged_pool_usage: usize,
+        quota_peak_non_paged_pool_usage: usize,
+        quota_non_paged_pool_usage: usize,
+        pagefile_usage: usize,
+        peak_pagefile_usage: usize,
+    }
+    #[repr(C)]
+    struct FileTime {
+        low: u32,
+        high: u32,
+    }
+
+    extern "system" {
+        fn GetCurrentProcess() -> isize;
+        fn GetProcessMemoryInfo(process: isize, counters: *mut ProcessMemoryCounters, cb: u32) -> i32;
+        fn GetProcessTimes(
+            process: isize,
+            creation: *mut FileTime,
+            exit: *mut FileTime,
+            kernel: *mut FileTime,
+            user: *mut FileTime,
+        ) -> i32;
+    }
+
+    let handle = unsafe { GetCurrentProcess() };
+    let mut rss = 0u64;
+    unsafe {
+        let mut pmc: ProcessMemoryCounters = zeroed();
+        pmc.cb = size_of::<ProcessMemoryCounters>() as u32;
+        if GetProcessMemoryInfo(handle, &mut pmc, pmc.cb) != 0 {
+            rss = pmc.working_set_size as u64;
+        }
+    }
+    let mut cpu_ms = 0u64;
+    unsafe {
+        let (mut c, mut e, mut k, mut u): (FileTime, FileTime, FileTime, FileTime) =
+            (zeroed(), zeroed(), zeroed(), zeroed());
+        if GetProcessTimes(handle, &mut c, &mut e, &mut k, &mut u) != 0 {
+            let ticks = |t: &FileTime| ((t.high as u64) << 32 | t.low as u64) as u64;
+            // FILETIME is 100 ns units → /10_000 = ms
+            cpu_ms = (ticks(&k) + ticks(&u)) / 10_000;
+        }
+    }
+    (rss, cpu_ms)
 }
 
 async fn index() -> Html<&'static str> {
