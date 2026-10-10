@@ -4,113 +4,357 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>xlr8</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#0d1117; --panel:#151a21; --panel2:#1c2129; --border:#2d333b; --fg:#e6edf3; --muted:#8b949e;
-          --add:#2ea04329; --del:#f8514929; --addfg:#3fb950; --delfg:#f85149; --accent:#58a6ff;
-          --warn:#d29922; --ok:#238636; --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); padding-bottom:34px;
-         font:14px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
-  ::selection { background:#388bfd44; }
-  :focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { transition-duration:0s !important; animation-duration:0s !important; }
+  :root {
+    /* Warp palette */
+    --color-obsidian: #000000;
+    --color-graphite: #121212;
+    --color-onyx: #1e1e1d;
+    --color-carbon: #333333;
+    --color-slate-deep: #40403f;
+    --color-bone: #faf9f6;
+    --color-paper: #ffffff;
+    --color-ash-light: #e3e2e0;
+    --color-ash-mid: #b4b4b2;
+    --color-ash: #868684;
+    --color-ink: #080808;
+    --color-violet: #cbb0f7;
+
+    --border: var(--color-onyx);
+
+    --add: rgba(203, 176, 247, 0.12);
+    --del: rgba(203, 176, 247, 0.06);
+    --addfg: var(--color-violet);
+    --delfg: var(--color-ash-mid);
+
+    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+    --radius-cards: 20px;
+    --radius-buttons: 33px;
+    --radius-inputs: 7px;
+    --radius-badges: 50px;
+    --radius-small: 4px;
   }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--color-obsidian);
+    color: var(--color-bone);
+    padding-bottom: 48px;
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--color-violet); color: var(--color-ink); }
+  :focus-visible { outline: 1px solid var(--color-violet); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
+  }
+
   .badge, .cs, .stat, #perf, .fgut, .ln .n, .ln .n2,
-  #commits-info, #diff-info, #search-info, .fig { font-variant-numeric:tabular-nums; }
-  .fig { position:relative; border:1px dashed var(--border); margin:0 0 14px; padding:16px 12px 10px;
-         background:var(--panel); font-family:var(--mono); font-size:12px; }
-  .fig::before { content:attr(data-title); position:absolute; top:-8px; left:14px; padding:0 8px;
-                 background:var(--bg); color:var(--muted); font-size:11px; letter-spacing:.6px; }
-  .fig::after { content:"+"; position:absolute; right:-5px; bottom:-10px; color:var(--muted);
-                background:var(--bg); padding:0 3px; font-size:12px; line-height:1; opacity:.7; }
-  .fig .fig { margin-bottom:10px; }
-  .fig .fig::before, .fig .fig::after { background:var(--panel); }
-  .fig .toolbar { margin-bottom:10px; }
-  .recede { opacity:.4; }
-  .a { color:var(--addfg); } .d { color:var(--delfg); }
-  .logo { font-family:var(--mono); font-size:18px; line-height:1; white-space:pre;
-          color:var(--accent); letter-spacing:0; font-weight:700; }
-  header { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:10px 20px;
-           background:var(--panel); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5; }
-  header h1 { font-size:15px; margin:0 8px 0 0; color:var(--accent); letter-spacing:.4px; font-weight:700; }
-  nav { display:flex; gap:4px; }
-  nav button { background:none; border:1px solid transparent; color:var(--muted); padding:5px 13px;
-               cursor:pointer; border-radius:0; font:inherit; font-size:13px;
-               transition:background-color .12s,color .12s,border-color .12s; }
-  nav button:hover { color:var(--fg); }
-  nav button.active { color:var(--fg); border-color:var(--border); background:var(--panel2); }
-  #repo-label { font-size:12px; }
-  #perf { position:fixed; left:0; right:0; bottom:0; display:flex; gap:14px; align-items:center;
-          justify-content:center; padding:7px 16px; background:var(--panel); border-top:1px solid var(--border);
-          font-family:var(--mono); font-size:12px; white-space:nowrap; overflow-x:auto; z-index:6; }
-  #perf-lat { color:var(--accent); font-weight:600; min-width:54px; text-align:right; }
-  main { padding:18px 20px; max-width:1200px; margin:0 auto; }
-  select { background:var(--bg); color:var(--fg); border:1px solid var(--border); border-radius:0;
-           padding:5px 8px; font:inherit; font-size:13px; transition:border-color .12s; }
-  select:hover { border-color:var(--muted); }
-  input[type="search"] { background:var(--bg); color:var(--fg); border:1px solid var(--border); border-radius:0;
-           padding:5px 9px; font:inherit; font-size:13px; transition:border-color .12s; }
-  input[type="search"]:focus { border-color:var(--accent); outline:none; }
-  .toolbar { display:flex; gap:8px; margin-bottom:14px; align-items:center; flex-wrap:wrap; }
-  .toolbar button { background:var(--panel2); color:var(--fg); border:1px solid var(--border);
-                    border-radius:0; padding:5px 14px; cursor:pointer; font:inherit; font-size:13px;
-                    transition:background-color .12s,border-color .12s; }
-  .toolbar button:hover { border-color:var(--muted); background:#21262d; }
-  #diff-btn { background:var(--ok); border-color:#2ea04366; }
-  #diff-btn:hover { background:#2ea043; border-color:#2ea043; }
-  .card { background:var(--panel); border:1px solid var(--border); border-radius:0;
-          margin-bottom:10px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.25); }
-  .card-h { padding:9px 14px; border-bottom:1px solid var(--border); display:flex; gap:10px;
-            align-items:center; cursor:pointer; font-family:var(--mono); font-size:13px;
-            transition:background-color .12s; }
-  .card-h:hover { background:var(--panel2); }
-  .stat { margin-left:auto; font-size:12px; }
-  .stat .a { color:var(--addfg); } .stat .d { color:var(--delfg); }
-  .cs { font-size:11px; font-variant-numeric:tabular-nums; }
-  .cs:empty { display:none; }
-  .cs .a { color:var(--addfg); } .cs .d { color:var(--delfg); }
-  .fview { font-family:var(--mono); font-size:12px; padding:6px 0; }
-  .frow { display:flex; gap:10px; padding:0 12px; line-height:20px; }
-  .fgut { min-width:40px; text-align:right; color:var(--muted); user-select:none; flex-shrink:0; }
-  .ftxt { flex:1; white-space:pre-wrap; word-break:break-all; }
-  .fsep { opacity:.55; }
-  mark { background:rgba(240,180,50,.28); color:inherit; border-radius:0; }
-  .status { width:18px; text-align:center; font-weight:700; font-family:var(--mono); }
-  .status.A { color:var(--addfg); } .status.D { color:var(--delfg); } .status.M { color:var(--warn); } .status.R { color:var(--accent); }
-  .mono { color:var(--muted); font-size:12px; font-family:var(--mono); }
-  /* windowed rows: only the viewport slice is in the DOM, positions are
-     absolute against total height — fixed row heights keep the math exact */
-  .vlines { position:relative; overflow-x:auto; }
-  .vlines > * { position:absolute; left:0; width:max-content; min-width:100%; }
-  .ln { display:flex; white-space:pre; height:22px; line-height:22px;
-        font-family:var(--mono); font-size:12.5px; }
-  .ln .n, .ln .n2 { width:48px; flex:none; text-align:right; padding-right:8px; color:var(--muted);
-                    user-select:none; background:#0d1117cc; position:sticky; }
-  .ln .n { left:0; }
-  .ln .n2 { left:48px; border-right:1px solid var(--border); }
-  .ln .t { padding-left:8px; }
-  .ln.add { background:var(--add); } .ln.add .t { color:var(--addfg); }
-  .ln.del { background:var(--del); } .ln.del .t { color:var(--delfg); }
-  .hunk-h { background:var(--panel2); color:var(--accent); padding:3px 10px; font-size:12px; line-height:19px;
-            height:27px; overflow:hidden; box-sizing:border-box;
-            font-family:var(--mono); border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
-  .gap { text-align:center; color:var(--muted); background:#21262d; padding:4px; font-size:12px; line-height:19px;
-         height:27px; overflow:hidden; box-sizing:border-box; }
-  .file-meta { padding:6px 14px; color:var(--muted); font-size:12px; }
-  .file-loading { padding:8px 14px; color:var(--muted); font-size:13px; }
-  .card.open .card-h { background:var(--panel2); }
-  .row { padding:10px 14px; border-bottom:1px solid var(--border); display:flex; gap:12px;
-         align-items:baseline; font-size:13px; transition:background-color .12s; }
-  .row:hover { background:#1c212980; }
-  .row:last-child { border-bottom:none; }
-  .row .sha { color:var(--accent); cursor:pointer; font-family:var(--mono); }
-  .badge { background:#21262d; border:1px solid var(--border); border-radius:0; padding:1px 9px;
-           font-size:12px; color:var(--muted); font-family:var(--mono); }
-  .muted { color:var(--muted); }
-  #toast { position:fixed; bottom:44px; right:16px; background:var(--panel2); border:1px solid var(--border);
-           padding:9px 15px; border-radius:0; display:none; font-family:var(--mono); font-size:13px;
-           box-shadow:0 6px 20px rgba(0,0,0,.45); }
+  #commits-info, #diff-info, #search-info, .fig { font-variant-numeric: tabular-nums; }
+
+  .fig {
+    position: relative;
+    border: 1px solid var(--color-onyx);
+    border-radius: var(--radius-cards);
+    margin: 0 0 10px;
+    padding: 24px;
+    background: var(--color-obsidian);
+  }
+  .fig::before {
+    content: attr(data-title);
+    position: absolute;
+    top: -10px;
+    left: 24px;
+    padding: 4px 12px;
+    background: var(--color-carbon);
+    color: var(--color-ash-mid);
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border-radius: var(--radius-badges);
+  }
+  .fig .fig {
+    margin-bottom: 10px;
+    background: var(--color-graphite);
+    border-radius: var(--radius-cards);
+  }
+  .fig .fig::before { background: var(--color-slate-deep); }
+  .fig .toolbar { margin-bottom: 10px; }
+  #repo-bar { margin-bottom: 24px; }
+
+  .recede { opacity: 0.45; }
+  .a { color: var(--addfg); font-weight: 500; }
+  .d { color: var(--delfg); font-weight: 500; }
+
+  header {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 16px 24px;
+    background: var(--color-obsidian);
+    border: none;
+  }
+  .logo {
+    font-family: var(--font-sans);
+    font-size: 18px;
+    line-height: 1;
+    color: var(--color-bone);
+    letter-spacing: -0.02em;
+    font-weight: 700;
+  }
+  header h1 { font-size: 18px; margin: 0 8px 0 0; color: var(--color-bone); font-weight: 700; }
+
+  nav { display: flex; gap: 24px; }
+  nav button {
+    background: transparent;
+    border: none;
+    color: var(--color-ash);
+    padding: 6px 0;
+    cursor: pointer;
+    border-radius: 7px;
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+  }
+  nav button:hover { color: var(--color-bone); }
+  nav button.active { color: var(--color-bone); }
+
+  #repo-label {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--color-ash);
+  }
+
+  #perf {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 20px;
+    background: var(--color-obsidian);
+    border-top: 1px solid var(--color-onyx);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow-x: auto;
+    z-index: 30;
+  }
+  #perf-lat { color: var(--color-bone); font-weight: 600; min-width: 54px; text-align: right; }
+
+  main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+  select, input[type="search"] {
+    background: var(--color-graphite);
+    color: var(--color-bone);
+    border: 1px solid var(--color-carbon);
+    border-radius: var(--radius-inputs);
+    padding: 7px 12px;
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 13px;
+    letter-spacing: -0.01em;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  select:hover, input[type="search"]:hover { border-color: var(--color-ash); }
+  select:focus, input[type="search"]:focus { border-color: var(--color-violet); }
+  select option { background: var(--color-graphite); color: var(--color-bone); }
+
+  .toolbar { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+  .toolbar button {
+    background: transparent;
+    color: var(--color-ash-mid);
+    border: 1px solid var(--color-carbon);
+    border-radius: var(--radius-buttons);
+    padding: 9px 20px;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+    transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  }
+  .toolbar button:hover { border-color: var(--color-ash-mid); color: var(--color-bone); }
+  #diff-btn { background: var(--color-paper); color: var(--color-ink); border-color: var(--color-paper); font-weight: 600; }
+  #diff-btn:hover { background: var(--color-ash-light); border-color: var(--color-ash-light); color: var(--color-ink); }
+
+  .card {
+    background: var(--color-onyx);
+    border: 1px solid var(--color-onyx);
+    border-radius: var(--radius-cards);
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+  .card:hover { border-color: var(--color-carbon); }
+  .card-h {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--color-carbon);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    background: transparent;
+    transition: background-color 0.15s;
+  }
+  .card-h:hover { background: var(--color-graphite); }
+  .card.open .card-h { background: var(--color-graphite); }
+
+  .stat { margin-left: auto; font-size: 12px; }
+  .stat .a { color: var(--addfg); } .stat .d { color: var(--delfg); }
+  .cs { font-size: 11px; font-variant-numeric: tabular-nums; }
+  .cs:empty { display: none; }
+
+  .fview { font-family: var(--font-mono); font-size: 12px; padding: 8px 0; background: var(--color-obsidian); }
+  .frow { display: flex; gap: 12px; padding: 0 16px; line-height: 20px; }
+  .fgut { min-width: 40px; text-align: right; color: var(--color-ash); user-select: none; flex-shrink: 0; }
+  .ftxt { flex: 1; white-space: pre-wrap; word-break: break-all; }
+  .fsep { opacity: 0.5; }
+  mark { background: var(--color-violet); color: var(--color-ink); border-radius: 3px; padding: 0 2px; }
+
+  .status {
+    width: 20px;
+    text-align: center;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    border-radius: var(--radius-small);
+    padding: 1px 4px;
+  }
+  .status.A { color: var(--color-violet); background: var(--add); }
+  .status.D { color: var(--color-ash-mid); background: var(--del); }
+  .status.M { color: var(--color-ash-light); background: rgba(227, 226, 224, 0.1); }
+  .status.R { color: var(--color-ash); background: rgba(134, 134, 132, 0.12); }
+
+  .mono { color: var(--color-ash); font-size: 12px; font-family: var(--font-mono); }
+
+  .vlines { position: relative; overflow-x: auto; background: var(--color-obsidian); }
+  .vlines > * { position: absolute; left: 0; width: max-content; min-width: 100%; }
+  .ln { display: flex; white-space: pre; height: 22px; line-height: 22px; font-family: var(--font-mono); font-size: 12px; }
+  .ln .n, .ln .n2 {
+    width: 48px;
+    flex: none;
+    text-align: right;
+    padding-right: 8px;
+    color: var(--color-ash);
+    user-select: none;
+    background: var(--color-graphite);
+    position: sticky;
+  }
+  .ln .n { left: 0; }
+  .ln .n2 { left: 48px; border-right: 1px solid var(--color-carbon); }
+  .ln .t { padding-left: 8px; }
+  .ln.add { background: var(--add); } .ln.add .t { color: var(--color-violet); }
+  .ln.del { background: var(--del); } .ln.del .t { color: var(--color-ash-mid); }
+
+  .hunk-h {
+    background: var(--color-graphite);
+    color: var(--color-ash);
+    padding: 3px 12px;
+    font-size: 12px;
+    line-height: 19px;
+    height: 27px;
+    overflow: hidden;
+    box-sizing: border-box;
+    font-family: var(--font-mono);
+    border-top: 1px solid var(--color-carbon);
+    border-bottom: 1px solid var(--color-carbon);
+    font-weight: 500;
+  }
+  .gap {
+    text-align: center;
+    color: var(--color-ash);
+    background: var(--color-obsidian);
+    padding: 4px;
+    font-size: 12px;
+    line-height: 19px;
+    height: 27px;
+    overflow: hidden;
+    box-sizing: border-box;
+    font-family: var(--font-mono);
+  }
+  .file-meta {
+    padding: 8px 16px;
+    color: var(--color-ash);
+    font-size: 12px;
+    font-family: var(--font-mono);
+    background: var(--color-graphite);
+    border-bottom: 1px solid var(--color-carbon);
+  }
+  .file-loading { padding: 12px 16px; color: var(--color-ash); font-size: 13px; }
+
+  .row {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--color-carbon);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    font-size: 13px;
+    transition: background-color 0.15s;
+  }
+  .row:hover { background: var(--color-graphite); }
+  .row:last-child { border-bottom: none; }
+  #commits-list .row[data-cid] { cursor: pointer; }
+  .row .sha {
+    color: var(--color-bone);
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    padding: 2px 8px;
+    background: var(--color-carbon);
+    border-radius: var(--radius-small);
+    border: 1px solid var(--color-carbon);
+  }
+  .row .sha:hover { background: var(--color-slate-deep); color: var(--color-bone); }
+
+  .badge {
+    background: transparent;
+    border: 1px solid var(--color-carbon);
+    border-radius: var(--radius-badges);
+    padding: 4px 12px;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-ash-mid);
+    font-family: var(--font-sans);
+  }
+  .muted { color: var(--color-ash); }
+
+  #toast {
+    position: fixed;
+    bottom: 48px;
+    right: 20px;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    padding: 10px 20px;
+    border-radius: var(--radius-buttons);
+    display: none;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+    z-index: 40;
+  }
 </style>
 </head>
 <body>
@@ -146,7 +390,7 @@
       <span class="muted" id="commits-info"></span>
       <button id="commits-next" title="next page">›</button>
     </div>
-    <div id="commits-fig"></div>
+    <div id="commits-fig" style="margin-top:24px"></div>
     <div id="commits-list"></div>
     </div>
   </section>
@@ -198,8 +442,7 @@ const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.style.dis
 const fmtBytes = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.round(b / 1024) + " KB";
 const fmtDur = (s) => s < 120 ? s + "s" : s < 7200 ? Math.floor(s / 60) + "m" : Math.floor(s / 3600) + "h";
 
-// live bottom bar: stats polled every 2 s (only ~1 ms of server work, paused
-// when the tab is hidden), uptime ticks locally every 1 s — no server cost
+// live stats polling
 let lastS = null, fetchedAt = 0;
 const meter = (frac, n = 12) => {
   const f = Math.round(Math.min(1, Math.max(0, frac)) * n);
@@ -225,7 +468,7 @@ function refreshStats() {
     renderStats();
   }).catch(() => {});
 }
-// sparkline of the last 40 round trips — block glyphs, max-scaled, no server
+// latency sparkline
 const LAT = [], SPARK_CH = "▁▂▃▄▅▆▇█";
 const mark = (ms) => {
   LAT.push(ms);
@@ -267,7 +510,6 @@ async function refreshRepos() {
 
 function onRepoChange() {
   $("#repo-label").textContent = repo || "";
-  // drop everything belonging to the previous repo so no stale data shows
   vclose($("#diff-summary")); $("#diff-summary").innerHTML = "";
   $("#diff-info").textContent = "";
   $("#pulls-list").innerHTML = '<span class="muted">loading…</span>';
@@ -295,8 +537,6 @@ $("#sync-btn").onclick = async () => {
 
 async function loadRefs() {
   const { refs } = await api(`/api/${repo}/refs`);
-  // default branch first, then alphabetical — alphabetical alone put ancient
-  // tags (bisect, gitgui-0.10.0…) on top and the whole list looked old-first
   const pref = ["main", "master"];
   const rank = (n) => { const i = pref.indexOf(n); return i < 0 ? pref.length : i; };
   refs.sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
@@ -307,13 +547,12 @@ async function loadRefs() {
   const names = refs.map(r => r.name);
   if (names.includes("main")) $("#base-ref").value = "main";
   else if (names.includes("master")) $("#base-ref").value = "master";
-  // GitHub-style default: base == head ("up to date") until the user picks
   $("#head-ref").value = $("#base-ref").value;
 }
 
 let commitsTok = 0;
 let commitsPage = 1;
-let commitTotal = null;          // total commits on ref, from count=1 (cached)
+let commitTotal = null;
 let commitsLoaded = 0;
 function renderCommitsInfo() {
   const limit = +$("#commits-size").value;
@@ -324,8 +563,7 @@ function renderCommitsInfo() {
   $("#commits-prev").disabled = commitsPage <= 1;
   $("#commits-next").disabled = pages ? commitsPage >= pages : commitsLoaded < limit;
 }
-// activity strip + author rank from the loaded page — pure client math on
-// data we already fetched, one small DOM subtree
+
 function renderCommitsFig(commits) {
   const el = $("#commits-fig");
   if (!commits.length) { el.innerHTML = ""; return; }
@@ -355,6 +593,7 @@ function renderCommitsFig(commits) {
       <span>${"█".repeat(Math.max(1, Math.round(v / amx * 12)))}</span><span class="muted">${v}</span></div>`).join("")}
   </div>`;
 }
+
 async function loadCommits() {
   const tok = ++commitsTok;
   const ref = $("#commits-ref").value;
@@ -373,14 +612,14 @@ async function loadCommits() {
       <span class="badge cs"></span>
       <span class="muted" style="margin-left:auto">${escapeHtml(c.author)} · ${new Date(c.time*1000).toLocaleString()}</span>
     </div></div>`).join("");
-  document.querySelectorAll(".sha").forEach(el => el.onclick = () => {
-    setRef("base-ref", el.dataset.sha + "^", el.textContent + "^");
-    setRef("head-ref", el.dataset.sha, el.textContent);
+  document.querySelectorAll("#commits-list .row[data-cid]").forEach(el => el.onclick = () => {
+    const sha = el.querySelector(".sha");
+    setRef("base-ref", sha.dataset.sha + "^", sha.textContent + "^");
+    setRef("head-ref", sha.dataset.sha, sha.textContent);
     document.querySelector('nav button[data-tab="compare"]').click();
     $("#diff-btn").click();
   });
-  // +/− per commit: separate cached request so this first paint stays ~20 ms;
-  // numbers pop in when ready (never blocks the list)
+
   api(`/api/${repo}/commits?${q}&stats=1`).then(({ commits: ws }) => {
     if (tok !== commitsTok) return;
     const m = new Map(ws.map(c => [c.id, c]));
@@ -390,7 +629,7 @@ async function loadCommits() {
         `<span class="a">+${c.additions}</span> <span class="d">−${c.deletions}</span>`;
     });
   }).catch(() => {});
-  // page total: one cached full-history walk per ref, also background
+
   if (commitTotal === null) {
     api(`/api/${repo}/commits?ref=${encodeURIComponent(ref)}&count=1`).then(r => {
       if (tok !== commitsTok) return;
@@ -450,7 +689,7 @@ async function openBlob(path) {
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) { el.innerHTML = `<span class="muted">${escapeHtml(String(e))}</span>`; }
 }
-// snippet caps: one rendered view stays at one open-diff-file's worth of rows
+
 const FILE_CTX = 2, FILE_MAX_HUNKS = 120, FILE_MAX_LINES = 200, FILE_LINE_MAX = 400;
 function fileView(text, terms) {
   const lines = text.split("\n");
@@ -469,7 +708,7 @@ function fileView(text, terms) {
     if (tl.some(t => l.includes(t))) keep.push(i);
   }
   if (!keep.length) {
-    return fileView(text, []); // terms matched the path, not the content
+    return fileView(text, []);
   }
   const hunks = [];
   for (const i of keep) {
@@ -507,7 +746,7 @@ async function doSearch() {
     const rows = [];
     for (const f of (r.hits || []).slice(0, 100))
       rows.push(`<div class="card row" data-p="${escapeAttr(f.path)}" style="cursor:pointer">
-        <span style="font-family:var(--mono);font-size:12px">${escapeHtml(f.path)}</span>
+        <span style="font-family:var(--font-mono);font-size:12px">${escapeHtml(f.path)}</span>
         <span class="badge" style="margin-left:auto">${f.score}</span></div>`);
     const byPath = new Map();
     for (const m of r.matches) {
@@ -517,9 +756,9 @@ async function doSearch() {
     for (const [path, ms] of byPath)
       rows.push(`<div class="card" data-p="${escapeAttr(path)}" style="cursor:pointer">
         <div class="row" style="padding:8px 14px;border-bottom:1px solid var(--border)">
-          <span style="font-family:var(--mono);font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(path)}</span>
+          <span style="font-family:var(--font-mono);font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(path)}</span>
           <span class="badge">${ms.length} line${ms.length === 1 ? "" : "s"}</span></div>
-        ${ms.map(m => `<div class="row" style="padding:5px 14px;gap:10px;font-family:var(--mono);font-size:12px">
+        ${ms.map(m => `<div class="row" style="padding:5px 14px;gap:10px;font-family:var(--font-mono);font-size:12px">
           <span class="muted" style="min-width:36px;text-align:right">${m.line}</span>
           <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(m.text)}</span></div>`).join("")}
       </div>`);
@@ -532,7 +771,7 @@ async function doSearch() {
 $("#search-q").addEventListener("input", () => { clearTimeout(searchDeb); searchDeb = setTimeout(doSearch, 250); });
 $("#search-ref").onchange = doSearch;
 
-// ---- in-app find (Ctrl+F) across virtualized diff rows ---------------------
+// in-app diff find
 let diffFilesCache = [];
 let findMatches = [], findIdx = -1, findTerm = "";
 function renderDiffFiles(files) {
@@ -577,7 +816,6 @@ function jumpToMatch() {
   const m = findMatches[findIdx];
   const e = VREG[m.vi];
   if (!e || !e.tops) return;
-  // scroll so the match is centered
   const box = document.querySelector(`.vlines[data-v="${m.vi}"]`);
   if (box) {
     voff(box);
@@ -601,7 +839,6 @@ $("#diff-find").addEventListener("keydown", (e) => {
   }
   if (e.key === "Escape") { $("#diff-find").value = ""; diffFind(""); }
 });
-// Ctrl+F focuses the in-app find when the compare tab is visible
 addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === "f") {
     const cmp = $("#tab-compare");
@@ -612,22 +849,18 @@ addEventListener("keydown", (e) => {
     }
     return;
   }
-  // don't hijack keys while typing in inputs
   if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
-  // / focuses the file filter in compare view
   if (e.key === "/" && $("#tab-compare").style.display !== "none") {
     e.preventDefault();
     $("#diff-filter").focus();
     $("#diff-filter").select();
     return;
   }
-  // tab shortcuts: 1=commits 2=compare 3=search 4=pulls
   const tabMap = { "1": "commits", "2": "compare", "3": "search", "4": "pulls" };
   if (tabMap[e.key]) {
     document.querySelector(`nav button[data-tab="${tabMap[e.key]}"]`).click();
     return;
   }
-  // j/k: expand/collapse next/prev file card in compare view
   if ((e.key === "j" || e.key === "k") && $("#tab-compare").style.display !== "none") {
     const cards = [...document.querySelectorAll("#diff-summary .card-h[data-path]")];
     if (!cards.length) return;
@@ -636,7 +869,6 @@ addEventListener("keydown", (e) => {
     const next = e.key === "j"
       ? (openIdx < cards.length - 1 ? openIdx + 1 : 0)
       : (openIdx > 0 ? openIdx - 1 : cards.length - 1);
-    // close current open file
     const cur = document.querySelector("#diff-summary .card.open .file-body");
     if (cur) { vclose(cur); cur.remove(); cur.parentElement.classList.remove("open"); }
     toggleFile(cards[next]);
@@ -670,9 +902,6 @@ $("#diff-btn").onclick = async () => {
   }
 };
 
-// file diffs expand inside their own card (one delegated listener instead of
-// per-card handlers; the windowed .vlines slice keeps off-screen rows out of
-// the DOM — no jump to page bottom like the old footer container)
 let diffBase = "", diffHead = "";
 $("#diff-summary").addEventListener("click", (e) => {
   const h = e.target.closest(".card-h[data-path]");
@@ -693,7 +922,7 @@ async function toggleFile(h) {
   if (h.dataset.opath && h.dataset.opath !== h.dataset.path) u += `&old_path=${encodeURIComponent(h.dataset.opath)}`;
   try {
     const fd = await api(u);
-    if (!body.isConnected) return; // new diff ran while fetching
+    if (!body.isConnected) return;
     body.innerHTML = fileBody(fd, h.dataset.path);
     vmount(body);
   } catch (e) {
@@ -701,35 +930,32 @@ async function toggleFile(h) {
   }
 }
 
-// ---- windowed diff rendering ------------------------------------------------
-// rows live in JS (tops = prefix-sum of fixed heights); the DOM holds only the
-// viewport slice ± 600 px per open file, so 10 × 20k-line diffs cost ~600
-// nodes each and open instantly — full-list DOM would be ~800k nodes.
-const VREG = [];                                   // {rows, tops}
-const vboxes = new Set();                          // mounted .vlines elements
-const V_H = [22, 27, 27];                          // ln / hunk / gap px (CSS-synced)
+// virtualized diff rows
+const VREG = [];
+const vboxes = new Set();
+const V_H = [22, 27, 27];
 let vframe = 0;
 
 function vmount(scope) {
   const box = scope.querySelector(".vlines");
   if (!box) return;
   vboxes.add(box);
-  vshift();                                          // re-offsets all, renders next frame
+  vshift();
 }
 function vclose(scope) {
   for (const b of scope.querySelectorAll(".vlines")) {
     vboxes.delete(b);
     const e = VREG[b.dataset.v | 0];
-    if (e) { e.rows = null; e.tops = null; }        // free the row data
+    if (e) { e.rows = null; e.tops = null; }
   }
 }
 function voff(box) { box._off = box.getBoundingClientRect().top + scrollY; }
-function vshift() { vboxes.forEach(voff); vpump(); }   // expand/collapse moves every box below
+function vshift() { vboxes.forEach(voff); vpump(); }
 function vpump() {
   if (vframe) return;
   vframe = requestAnimationFrame(() => { vframe = 0; vboxes.forEach(vslice); });
 }
-function vfind(tops, x) {                          // first idx with tops[idx] >= x
+function vfind(tops, x) {
   let lo = 0, hi = tops.length - 1;
   while (lo < hi) { const m = (lo + hi) >> 1; if (tops[m] < x) lo = m + 1; else hi = m; }
   return lo;
@@ -738,7 +964,7 @@ function vslice(box) {
   const e = VREG[box.dataset.v | 0];
   if (!e || !e.rows) return;
   const start = scrollY - box._off - 600, end = scrollY - box._off + innerHeight + 600;
-  if (end < 0 || start > e.tops[e.rows.length]) return;   // fully offscreen
+  if (end < 0 || start > e.tops[e.rows.length]) return;
   const i = Math.max(0, vfind(e.tops, start) - 1);
   const j = Math.min(e.rows.length, vfind(e.tops, end) + 1);
   if (box._i === i && box._j === j) return;
