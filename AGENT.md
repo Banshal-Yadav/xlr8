@@ -173,7 +173,7 @@ hello **0.68 ms**).
 - [x] file_diff 404 (bad path/ref → 404, wrong params → 400)
 - [x] sub-ms pass: typed JSON, TCP_NODELAY, Arc blob cache, response cache,
       inline micro-paths, debug-gated logs — warm endpoints 1.4–12 ms,
-      outputs byte-identical to pre-pass build
+      output unchanged from pre-pass build
 - [ ] smoke test on Windows laptop (`cargo build --release`, open UI)
 - [ ] virtualized diff rendering (only visible lines in DOM)
 - [ ] PR "files changed" tab using local diff of PR head/base SHAs

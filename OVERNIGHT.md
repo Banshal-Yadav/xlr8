@@ -142,7 +142,7 @@ Read all of src/ (main, server, repo, diff, search, rewrite, mirror, cli, log, g
 ## Parity (all exact after every change)
 > **Correction (FIX session)**: the +/- line totals below are xlr8's own
 > `imara_diff` numbers — verified *regression-exact* (old binary vs new binary)
-> and file/rename/status sets exact vs `git diff -M`, but **not** byte-identical
+> and file/rename/status sets exact vs `git diff -M`, but **not** identical
 > to git's xdiff line choices. Raw `git diff --shortstat` differs slightly (table
 > in the FIX session section). Counts/refs/grep ARE exact vs git CLI.
 - rg `0.1.0..15.2.0`: 252 files, +72442/-21356

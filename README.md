@@ -30,16 +30,23 @@ Opens `http://127.0.0.1:7782`. Repo mirrored to `~/.cache/xlr8/mirrors/`, synced
 
 ## Performance
 
-vs `git diff` (Windows laptop, warm, includes HTTP+JSON):
+vs `git diff --numstat -M` (Windows laptop — AMD Ryzen 7 7735HS, 8C/16T, packed
+mirrors, warm, xlr8 includes HTTP+JSON).
+Compute = first request after process start; cached = repeat (response cache hit).
 
-| Range | Files | xlr8 | git | Speedup |
-|---|---|---|---|---|
-| tokio 1.50..1.53 | 298 | 12.5 ms | 75 ms | **6.0×** |
-| libuv v1.49..v1.53 | 194 | 13 ms | 79 ms | **5.9×** |
-| ripgrep 14.1..15.1 | 91 | 9.7 ms | 54 ms | **5.6×** |
-| libuv v1.0..v1.53 | 495 | 46 ms | 109 ms | **2.4×** |
+| Range | Files | xlr8 compute | xlr8 cached | git | Speedup |
+|---|---|---|---|---|---|
+| tokio 1.0..1.53 | 867 | 36–39 ms | 0.8–0.9 ms | 119–123 ms | **3.3×** |
+| libuv v1.0..v1.53 | 495 | 28–29 ms | 0.8 ms | 99–104 ms | **3.5×** |
+| stress base..head | 2000 | 38–40 ms | 0.8–1.0 ms | 69–77 ms | **1.8×** |
+| ripgrep 0.1..15.2 | 252 | 25–28 ms | 0.8–0.9 ms | 68–71 ms | **2.7×** |
+| tokio 1.50..1.53 | 298 | 17–18 ms | 0.8–1.0 ms | 66–69 ms | **3.9×** |
+| libuv v1.49..v1.53 | 194 | 15–18 ms | 0.8–1.0 ms | 71–74 ms | **4.4×** |
+| ripgrep 14.1..15.1 | 91 | 9.5–11 ms | 0.8 ms | 47–49 ms | **4.5×** |
 
-Every row beats git. Cached responses: **~1 ms**.
+Every row beats git. Cached responses: **~1 ms**. File counts and totals match
+git; ± deltas are the documented imara-vs-xdiff alignment ambiguity — see
+`benchmark.md`.
 
 ## Built with
 

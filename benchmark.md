@@ -123,8 +123,8 @@ repeat. Both include HTTP + JSON.
 | 11 | terminator-kept tokens + full walk + rename-aware file view | EOF-newline changes count; commits = full date-ordered walk (not first-parent); `old_path` for renamed files | correctness (below) |
 | 12 | blob cache | per-mirror memo of blob bytes (`repo.rs`, 64 MB cap, cleared on that mirror's pull) — warm requests skip pack lookup + inflate entirely | stress **253 → 96 ms** (stats 175→38 ms), rg15y **88 → 54 ms** |
 | 13 | real-repo validation + rename resolver fix | libuv exposed source-id-order greedy resolution pairing wrong files (`uv-linux.h → sysinfo-memory.c`) → global best-first assignment (sort by similarity desc, ties by index, greedy with emitted check) | libuv 15/16 of git's pairs exact (was several absurd pairings), tokio 29/29 exact; prior suites still exact |
-| 14 | sub-ms pass | typed `Json<T>` (axum's `Json(value)` double-serializes), `TCP_NODELAY` (axum sets none → Nagle), `Arc<[u8]>` blob cache (no clone per consumer), cached `available_parallelism`/`cache_dir`/CPU count, object cache on every gix handle, inline stats for ≤16 files, sequential rename scoring for ≤64 pairs, response cache (serialized JSON per mirror+request, cleared on sync), `DEBUG`-gated phase logs (default skips 2 stderr writes/request) | warm endpoints **1.4–12 ms** (hello keep-alive **0.68 ms**), compute path −5–15% (uvL 129→90, tkL 158→139); output **byte-identical** to pre-pass build |
-| 15 | Windows cold-path pass | startup prewarm (repo open + HEAD at boot, off request path), split thread caps (stats→16, renames→8 — A/B via `XLR8_THREADS`), sharded blob cache (1 global mutex → 16-way striping) | stress cold **179→54 ms (3.3×)**, rg15y 79→36 ms; **every row beats git** on laptop; parity byte-identical |
+| 14 | sub-ms pass | typed `Json<T>` (axum's `Json(value)` double-serializes), `TCP_NODELAY` (axum sets none → Nagle), `Arc<[u8]>` blob cache (no clone per consumer), cached `available_parallelism`/`cache_dir`/CPU count, object cache on every gix handle, inline stats for ≤16 files, sequential rename scoring for ≤64 pairs, response cache (serialized JSON per mirror+request, cleared on sync), `DEBUG`-gated phase logs (default skips 2 stderr writes/request) | warm endpoints **1.4–12 ms** (hello keep-alive **0.68 ms**), compute path −5–15% (uvL 129→90, tkL 158→139); output unchanged from pre-pass build |
+| 15 | Windows cold-path pass | startup prewarm (repo open + HEAD at boot, off request path), split thread caps (stats→16, renames→8 — A/B via `XLR8_THREADS`), sharded blob cache (1 global mutex → 16-way striping) | stress cold **179→54 ms (3.3×)**, rg15y 79→36 ms; **every row beats git** on laptop; parity exact |
 
 ## Correctness ledger (bugs found and fixed by comparing to git)
 
@@ -282,7 +282,7 @@ restart (empty caches); warm = repeat of the same request:
   500s (ledger above) and the over-limit rename gate — both fixed before
   these numbers.
 
-## Windows laptop — full re-run (2026-10-07)
+## Windows laptop — full re-run (2026-10-08)
 
 Every row above re-run on real hardware (no PRoot), same methodology:
 `curl -w '%{time_total}'`, release binary, packed mirrors, warm page cache
@@ -309,13 +309,13 @@ After the cold-path pass (see "Cold-path fixes" below).
 
 | Range | Files | xlr8 (compute) | xlr8 (cached) | git CLI | speedup (compute) |
 |---|---|---|---|---|---|
-| stress `base..head` | 2000 | **54 ms** | **0.7–1.1 ms** | 79 ms | **≈1.5×** |
-| ripgrep `0.1.0..15.2.0` | 252 | **36 ms** | 0.8 ms | 76 ms | **≈2.1×** |
-| ripgrep `14.1.1..15.1.0` | 91 | **9.7 ms** | 0.8 ms | 54 ms | **≈5.6×** |
-| libuv `v1.0.0..v1.53.0` | 495 | **46 ms** | 1.1 ms | 109 ms | **≈2.4×** |
-| libuv `v1.49.0..v1.53.0` | 194 | **13 ms** | 0.9 ms | 79 ms | **≈5.9×** |
-| tokio `1.0.0..1.53.2` | 867 | **81 ms** | 0.9–1.2 ms | 134 ms | **≈1.7×** |
-| tokio `1.50.0..1.53.2` | 298 | **12.5 ms** | 0.9 ms | 75 ms | **≈6.0×** |
+| stress `base..head` | 2000 | **38–40 ms** | **0.8–1.0 ms** | 69–77 ms | **≈1.8×** |
+| ripgrep `0.1.0..15.2.0` | 252 | **25–28 ms** | 0.8–0.9 ms | 68–71 ms | **≈2.7×** |
+| ripgrep `14.1.1..15.1.0` | 91 | **9.5–11 ms** | 0.8 ms | 47–49 ms | **≈4.5×** |
+| libuv `v1.0.0..v1.53.0` | 495 | **28–29 ms** | 0.8 ms | 99–104 ms | **≈3.5×** |
+| libuv `v1.49.0..v1.53.0` | 194 | **15–18 ms** | 0.8–1.0 ms | 71–74 ms | **≈4.4×** |
+| tokio `1.0.0..1.53.2` | 867 | **36–39 ms** | 0.8–0.9 ms | 119–123 ms | **≈3.3×** |
+| tokio `1.50.0..1.53.2` | 298 | **17–18 ms** | 0.8–1.0 ms | 66–69 ms | **≈3.9×** |
 
 **Every row beats git.** (Pre-fix: stress row lost — 143–179 ms vs git 79 ms.)
 
@@ -342,8 +342,8 @@ already **4.3 ms** (≈12× faster than git). Three fixes, A/B-measured:
    serialization point for 16 workers → 16-way lock striping (per-shard 4 MB
    cap, DefaultHasher on path+id; `invalidate` walks all shards).
 
-Result: stress cold **179 → 54 ms (3.3×)**; every row now beats git.
-Correctness re-verified byte-identical after all three fixes (rg
+Result: stress cold **179 → 38–40 ms (≈4.5×)**; every row now beats git.
+Correctness re-verified after all three fixes (rg
 252/+72 442/−21 356, stress 2000/+4 000/−0, tokio 867/+127 896/−24 244).
 
 ### Phase breakdown (warm, `RUST_LOG=debug`)
@@ -352,48 +352,48 @@ Post-fix values; pre-fix in parens where changed.
 
 | Range | walk | renames | stats | total (server) |
 |---|---|---|---|---|
-| stress 2000 files | 7.2 ms | 0.08 ms | **40 ms** (was 90) | **51 ms** (was 140–177) |
-| rg 252 files | 1.5 ms | 27 ms | 3.0 ms | 34 ms |
-| rg 91 files | 1.5 ms | 0.6 ms | 5.9 ms | 8.4 ms |
-| libuv 495 files | 1.9 ms | 21 ms | 16.6 ms | 43 ms |
-| libuv 194 files | 1.7 ms | 0.5 ms | 9.1 ms | 11.8 ms |
-| tokio 867 files | 4.3 ms | **60 ms** (76 at 16 thr) | 10.9 ms | 79 ms |
-| tokio 298 files | 3.4 ms | 0.9 ms | 6.4 ms | 11 ms |
+| stress 2000 files | 4.4 ms | 1.5 ms | 30.8 ms | **38.4 ms** |
+| rg 252 files | 1.2 ms | 21.4 ms | 1.8 ms | **24.7 ms** |
+| rg 91 files | 1.0 ms | 2.0 ms | 4.6 ms | **7.9 ms** |
+| libuv 495 files | 1.3 ms | 11.9 ms | 9.3 ms | **24.6 ms** |
+| libuv 194 files | 1.1 ms | 1.7 ms | 5.3 ms | **8.5 ms** |
+| tokio 867 files | 3.1 ms | 25.1 ms | 6.9 ms | **37.3 ms** |
+| tokio 298 files | 2.4 ms | 1.8 ms | 5.6 ms | **10.1 ms** |
 
-Rename scoring still the bottleneck on big ranges (tokio: 60 ms of 79 ms) —
-but **≈1.6–2× faster than the ARM baseline** (93–129 ms). Small ranges skip the
+Rename scoring still the bottleneck on big ranges (tokio: 25 ms of 37 ms) —
+but **≈2–4× faster than the ARM baseline** (93–129 ms). Small ranges skip the
 parallel path entirely (≤64 pairs → sequential, sub-ms).
 
 ### Other endpoints (cold-proc → cached)
 
 | Request | Laptop | ARM baseline |
 |---|---|---|
-| refs tokio (first hit) | **24 ms** → 1.0 ms | 187 ms → 1.4–15 ms |
-| commits?n=50 (rg) | 2.3 ms → 1.0 ms | 7.5–12 ms → 1.7–12.6 ms |
-| file diff rg `crates/core/main.rs` | **1.6–1.8 ms** → 0.9 ms | 43–56 ms → 1.3–2.7 ms |
-| file diff stress `giant2.txt` (20k lines) | 9.4 ms | 44–66 ms |
-| hello diff `7a6b19cf..main` | 22 ms (repo open) → 1.4 ms | 33 ms → 0.68–9 ms |
-| index `/` | **0.8–1.1 ms** | 1.9–11 ms |
-| keep-alive repeat (browser-style) | **0.71–1.1 ms** | 0.68–1.5 ms |
+| refs tokio (first hit) | **12.9 ms** → 0.8–1.0 ms | 187 ms → 1.4–15 ms |
+| refs ripgrep (first hit) | **27.8 ms** → 0.8 ms | 183 ms → 4 ms |
+| commits?n=50 (rg) | 1.8 ms → 0.8 ms | 7.5–12 ms → 1.7–12.6 ms |
+| commits?n=50 (tokio) | 3.3 ms → 0.8 ms | 12 ms → 3.4–12.6 ms |
+| file diff rg `crates/core/main.rs` | **1.6 ms** → 0.9 ms | 43–56 ms → 1.3–2.7 ms |
+| file diff stress `giant2.txt` (20k lines) | 8.7 ms → 1.7 ms | 44–66 ms |
+| index `/` | **0.8 ms** | 1.9–11 ms |
+| keep-alive repeat (browser-style) | **0.8–1.0 ms** | 0.68–1.5 ms |
 
 ### Correctness
 
 Output **identical to the ARM run** on every range (file counts and
 totals match the git-exact numbers documented above): rg 252/+72 442/−21 356,
 rg91 91/+3 607/−1 073, libuv 495/+80 354/−24 096, tokio 867/+127 896/−24 244,
-stress 2000/+4 000/−0. Cross-device, byte-level parity — the ± deltas vs git
+stress 2000/+4 000/−0. Cross-device parity — the ± deltas vs git
 are the documented imara-vs-xdiff ambiguity, unchanged.
 
 ### Headline deltas (laptop vs ARM)
 
-- Cached responses: **0.7–1.1 ms** vs 1.5–15 ms
-- tokio long compute: **81 ms** vs 139 ms
-- rename scoring (tokio): **60 ms** vs 93–129 ms
-- refs first hit (tokio): **24 ms** vs 187 ms
+- Cached responses: **0.8–1.0 ms** vs 1.5–15 ms
+- tokio long compute: **36–39 ms** vs 139 ms
+- rename scoring (tokio): **25 ms** vs 93–129 ms
+- refs first hit (tokio): **12.9 ms** vs 187 ms
 - file diff (rg main.rs): **1.6 ms** vs 43–56 ms (cold-proc both)
-- stress cold: **54 ms** vs 78–109 ms — and git baseline also got faster
-  without PRoot (79 ms vs 143 ms); after the cold-path fixes xlr8 still
-  wins every row
+- stress cold: **38–40 ms** vs 78–109 ms — and git baseline also got faster
+  without PRoot (69–77 ms vs 143 ms); xlr8 still wins every row
 
 ### Reproduce (Windows)
 
