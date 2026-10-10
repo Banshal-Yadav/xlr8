@@ -46,7 +46,7 @@ Compute = first request after process start; cached = repeat (response cache hit
 
 Every row beats git. Cached responses: **~1 ms**. File counts and totals match
 git; ± deltas are the documented imara-vs-xdiff alignment ambiguity — see
-`benchmark.md`.
+`docs/benchmark.md`.
 
 ## Built with
 

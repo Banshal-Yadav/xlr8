@@ -47,7 +47,8 @@ src/server.rs    axum routes + response cache (serialized JSON per
                  mirror+request, cleared on sync) + TCP_NODELAY + embedded UI
 assets/index.html  UI (vanilla JS, tabs: Commits / Compare / Pulls)
 bench/gen_stress.sh  synthetic 2000-file fixture generator
-benchmark.md     full perf history + numbers
+docs/benchmark.md    full perf history + numbers
+docs/PERF-FINDINGS.md  single-threaded analysis + how to beat git per-core
 ```
 
 Naming history: crate name `xlr8` was chosen after checking crates.io

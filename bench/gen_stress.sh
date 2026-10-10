@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generate the synthetic stress repo used by benchmark.md.
+# Generate the synthetic stress repo used by docs/benchmark.md.
 # Usage: bash gen_stress.sh [output_dir]   (default: ./stress-src)
 set -euo pipefail
 
