@@ -1,11 +1,13 @@
 # Performance tuning log — 2026-10-11
 
 > **Re-verified 2026-10-11 (Windows laptop, AMD Ryzen 7 7735HS):** the full
-> 8-range harness was re-run at 100 warm reps / 5 cold+disk reps on the build
-> laptop. All three features hold: cold beats git on **all 8 ranges** (1.9–7.9×),
-> warm medians ≤3.3 ms, 1M-line diff 3.1 ms warm / 19 ms after restart. Fresh
-> tables: `docs/BENCHMARKS.md`; raw log: `docs/BENCHMARKS-raw.txt`. The ARM/PRoot
-> numbers below remain as the original tuning record.
+> 8-range harness was re-run at 100 warm reps / 5 cold+disk reps, both 16-thread
+> (default) and single-thread (`XLR8_THREADS=1`). All three features hold: warm
+> is ~0.1 ms on every range; cold (16T) beats git on 7/8 ranges (1.7–4.8×);
+> single-thread cold wins 4/8 (the honest equal-cores view). 1M-line diff
+> 0.19 ms warm / 57 ms after restart. Fresh tables: `docs/BENCHMARKS.md`; raw
+> log: `docs/BENCHMARKS-raw.txt`. The ARM/PRoot numbers below remain as the
+> original tuning record.
 
 Tuning log for the three optimizations in `docs/PERF-FINDINGS.md`. All numbers
 below are raw measurements on the ARM/PRoot device (pessimal floor — laptop

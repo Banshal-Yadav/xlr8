@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Million-line-diff benchmark: git truth + xlr8 cold/warm/disk.
 
-Usage: python bench/million_bench.py [--warm 100] [--reps 5] [--port 8908]
+Usage: python bench/million_bench.py [--warm 100] [--reps 5] [--threads N] [--port 8908]
 """
 import argparse
 import json
@@ -10,47 +10,15 @@ import shutil
 import statistics
 import subprocess
 import time
-import urllib.request
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BIN = os.path.join(ROOT, "target", "release", "xlr8.exe")
-MIRRORS = os.path.join(os.environ.get("LOCALAPPDATA", ""), "xlr8", "mirrors")
+from benchlib import (ROOT, KeepAlive, cmp_dir, http_get, mirror_path,
+                      start_server, stop_server)
+
 SLUG = "bench_million.git"
-MIRROR = os.path.join(MIRRORS, SLUG)
-CMP = MIRROR + ".cmp"
+MIRROR = mirror_path(SLUG)
+CMP = cmp_dir(SLUG)
 
 RANGES = [("million_add1M", "base", "a1"), ("million_mod500k", "base", "m1")]
-
-
-def start_server(port):
-    proc = subprocess.Popen([BIN, "stress/big", "--port", str(port), "--no-open"],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 60
-    while time.time() < deadline:
-        if proc.poll() is not None:
-            raise RuntimeError("server exited")
-        try:
-            with urllib.request.urlopen(base + "/api/repos", timeout=2) as r:
-                if r.status == 200:
-                    return proc, base
-        except Exception:
-            time.sleep(0.1)
-    proc.kill()
-    raise RuntimeError("no ready")
-
-
-def stop(proc):
-    if proc and proc.poll() is None:
-        proc.kill()
-        proc.wait()
-
-
-def http_get(url):
-    t0 = time.perf_counter()
-    with urllib.request.urlopen(url, timeout=300) as r:
-        body = r.read()
-    return (time.perf_counter() - t0) * 1000.0, body
 
 
 def git_truth(base, head):
@@ -82,6 +50,7 @@ def main():
     ap.add_argument("--warm", type=int, default=100)
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--port", type=int, default=8908)
+    ap.add_argument("--threads", type=int, default=None)
     args = ap.parse_args()
 
     log = open(os.path.join(ROOT, "docs", "BENCHMARKS-raw.txt"), "a", encoding="utf-8")
@@ -92,7 +61,7 @@ def main():
         log.flush()
 
     emit("")
-    emit(f"# million bench  warm={args.warm} reps={args.reps}  {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    emit(f"# million bench  warm={args.warm} reps={args.reps} threads={args.threads or 'default'}  {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
     git = {}
     for tag, base, head in RANGES:
@@ -106,7 +75,7 @@ def main():
 
     for rep in range(args.reps):
         shutil.rmtree(CMP, ignore_errors=True)
-        proc, base_url = start_server(args.port)
+        proc, base_url = start_server(args.port, args.threads)
         try:
             for tag, base, head in RANGES:
                 ms, body = http_get(f"{base_url}/api/bench/million/diff?base={base}&head={head}")
@@ -114,27 +83,29 @@ def main():
                 f, a, d = totals(body)
                 emit(f"  COLD {tag:16s} rep{rep} {ms:8.1f}ms files={f} +{a} -{d}")
         finally:
-            stop(proc)
-        proc, base_url = start_server(args.port)
+            stop_server(proc)
+        proc, base_url = start_server(args.port, args.threads)
         try:
             for tag, base, head in RANGES:
                 ms, _ = http_get(f"{base_url}/api/bench/million/diff?base={base}&head={head}")
                 res[tag]["disk"].append(ms)
                 emit(f"  DISK {tag:16s} rep{rep} {ms:8.1f}ms")
         finally:
-            stop(proc)
+            stop_server(proc)
 
-    proc, base_url = start_server(args.port)
+    proc, base_url = start_server(args.port, args.threads)
+    ka = KeepAlive(args.port)
     try:
         for tag, base, head in RANGES:
-            url = f"{base_url}/api/bench/million/diff?base={base}&head={head}"
-            http_get(url)
-            warm = [http_get(url)[0] for _ in range(args.warm)]
+            path = f"/api/bench/million/diff?base={base}&head={head}"
+            ka.get(path)
+            warm = [ka.get(path)[0] for _ in range(args.warm)]
             res[tag]["warm"] = warm
             emit(f"  WARM {tag:16s} n={args.warm} med={statistics.median(warm):7.2f}ms "
                  f"min={min(warm):7.2f} max={max(warm):7.2f}")
     finally:
-        stop(proc)
+        ka.close()
+        stop_server(proc)
 
     emit("")
     emit("=== MILLION SUMMARY (medians) ===")

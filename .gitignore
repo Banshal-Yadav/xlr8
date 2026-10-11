@@ -1,3 +1,4 @@
 /target
 *.log
 *.err
+__pycache__/

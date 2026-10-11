@@ -13,8 +13,9 @@ Harness: `bench/absbench.py`, `bench/million_bench.py`, `bench/api_bench.py`
 
 ```bash
 cargo build --release
-python bench/absbench.py --warm 100 --reps 5
-python bench/million_bench.py --warm 100 --reps 5   # needs bench/gen_million.py
+python bench/absbench.py --warm 100 --reps 5              # 16-thread (default)
+python bench/absbench.py --warm 100 --reps 5 --threads 1  # single-thread
+python bench/million_bench.py --warm 100 --reps 5         # needs bench/gen_million.py
 python bench/api_bench.py --warm 100
 ```
 
@@ -27,8 +28,11 @@ python bench/api_bench.py --warm 100
   first HTTP hit = full compute. 5 independent fresh-process reps.
 - **disk**: kill server (disk cache kept), restart, first hit = OID-keyed
   persistent cache read. 5 reps.
-- **warm**: in-memory repeat ×100, median/min/max.
-- **API**: tokio endpoints ×100 warm, median/min/max.
+- **warm**: in-memory repeat ×100 over a **persistent connection** (what a
+  browser does), median/min/max. A fresh connection per request adds a ~24 ms
+  TCP-setup spike on Windows that would otherwise dominate the median.
+- **threads**: `XLR8_THREADS` env var. Default = `available_parallelism()`
+  clamped to 16 (= 16 here). `--threads 1` forces single-threaded.
 
 ## Ranges
 
@@ -43,72 +47,90 @@ python bench/api_bench.py --warm 100
 | million_add1M | bench/million | base..a1 | **+1,000,000/−0**, 2500 new files |
 | million_mod500k | bench/million | base..m1 | ±250,000, 1250 modified files |
 
-## Summary (medians)
+## Summary — 16 threads (default)
 
 | range | git | xlr8 cold | xlr8 disk (restart) | xlr8 warm | cold vs git | warm vs git |
 |---|---:|---:|---:|---:|---:|---:|
-| rg91 | 93.5 ms | 24.2 ms | 4.6 ms | 3.25 ms | 3.87× | 28.8× |
-| rg252 | 124.2 ms | 48.8 ms | 2.5 ms | 2.21 ms | 2.55× | 56.2× |
-| tokio867 | 234.0 ms | 62.1 ms | 7.4 ms | 1.87 ms | 3.77× | 125.1× |
-| libuv495 | 196.1 ms | 47.2 ms | 15.0 ms | 1.95 ms | 4.15× | 100.6× |
-| stress2000 | 122.4 ms | 63.3 ms | 4.7 ms | 2.09 ms | 1.93× | 58.5× |
-| stressgiant | 138.8 ms | 18.6 ms | 2.6 ms | 2.19 ms | 7.44× | 63.5× |
-| **million_add1M** | **205.0 ms** | **25.8 ms** | **19.4 ms** | **3.05 ms** | 7.94× | 67.3× |
-| million_mod500k | 184.7 ms | 27.9 ms | 3.9 ms | 2.06 ms | 6.62× | 89.6× |
+| rg91 | 45.1 ms | 63.2 ms | 57.4 ms | 0.09 ms | **0.71×** | 476× |
+| rg252 | 64.7 ms | 27.5 ms | 1.9 ms | 0.11 ms | 2.35× | 614× |
+| tokio867 | 115.0 ms | 30.3 ms | 4.4 ms | 0.12 ms | 3.80× | 996× |
+| libuv495 | 93.1 ms | 40.0 ms | 2.7 ms | 0.11 ms | 2.32× | 862× |
+| stress2000 | 58.7 ms | 32.3 ms | 13.4 ms | 0.15 ms | 1.81× | 400× |
+| stressgiant | 68.5 ms | 27.4 ms | 14.2 ms | 0.13 ms | 2.50× | 517× |
+| **million_add1M** | **121.4 ms** | **70.0 ms** | **57.3 ms** | **0.19 ms** | 1.73× | 652× |
+| million_mod500k | 109.7 ms | 22.9 ms | 18.0 ms | 0.11 ms | 4.79× | 969× |
+
+## Summary — 1 thread (`XLR8_THREADS=1`)
+
+| range | git | xlr8 cold | xlr8 disk (restart) | xlr8 warm | cold vs git | warm vs git |
+|---|---:|---:|---:|---:|---:|---:|
+| rg91 | 45.5 ms | 77.0 ms | 49.8 ms | 0.10 ms | **0.59×** | 475× |
+| rg252 | 64.3 ms | 48.9 ms | 15.7 ms | 0.11 ms | 1.32× | 604× |
+| tokio867 | 117.9 ms | 122.0 ms | 3.3 ms | 0.11 ms | **0.97×** | 1043× |
+| libuv495 | 97.7 ms | 81.7 ms | 13.5 ms | 0.11 ms | 1.20× | 908× |
+| stress2000 | 57.7 ms | 218.6 ms | 16.5 ms | 0.13 ms | **0.26×** | 446× |
+| stressgiant | 64.4 ms | 25.7 ms | 3.0 ms | 0.13 ms | 2.51× | 491× |
+| million_add1M | 119.5 ms | 120.8 ms | 56.7 ms | 0.14 ms | **0.99×** | 878× |
+| million_mod500k | 114.8 ms | 83.3 ms | 2.3 ms | 0.12 ms | 1.38× | 960× |
 
 Headlines:
 
-- **Cold xlr8 beats git on all 8 ranges** (1.9–7.9×) on this device.
-- **Every warm median is ≤3.3 ms** regardless of range size (response served
-  from the in-memory cache; body ≤241 KB even at 2500 files).
-- **1-million-line diff: 3.1 ms warm, 19 ms after process restart** (git: 205 ms).
-- The persistent OID-keyed compare cache makes a restart hit single-digit ms
-  for every range except the 1M-line add (19 ms — the 16 MiB body read).
+- **Warm is thread-independent and ~0.1 ms** on every range — the response is
+  served from the in-memory cache; no walk, no diff, no serde. This is the
+  number a browser sees on a repeat view.
+- **Cold (16 threads) beats git on 7/8 ranges** (1.7–4.8×). The one loss is
+  rg91 (0.71×): 91 files is small enough that xlr8's fixed repo-open + ref-peel
+  cost dominates, while git's process startup is amortized.
+- **Cold (1 thread) beats git on 4/8 ranges.** The single-thread column is the
+  honest "equal cores" comparison: xlr8's cold advantage is largely parallelism.
+  It still wins on rg252/libuv/stressgiant/million_mod500k, ties tokio867 and
+  million_add1M, and loses rg91 and stress2000 (gix delta-chain inflate).
+- **1-million-line diff: 0.19 ms warm, 57 ms after process restart** (git: 121 ms).
 
-## API endpoints (tokio, warm ×100)
+## API endpoints (tokio, warm ×100, persistent connection)
 
-| endpoint | median | min | max |
-|---|---:|---:|---:|
-| /refs (all refs) | 1.96 ms | 0.56 ms | 26.74 ms |
-| /commits?limit=50 | 1.73 ms | 0.64 ms | 25.39 ms |
-| /commits?limit=500 | 2.13 ms | 0.58 ms | 26.37 ms |
-| /commits?count=1 | 1.81 ms | 0.48 ms | 24.68 ms |
-| /commits?limit=10&ref=tokio-1.53.2 | 1.47 ms | 0.56 ms | 26.64 ms |
+| endpoint | 16-thread median | 1-thread median |
+|---|---:|---:|
+| /refs (all refs) | 0.10 ms | 0.11 ms |
+| /commits?limit=50 | 0.10 ms | 0.10 ms |
+| /commits?limit=500 | 0.13 ms | 0.11 ms |
+| /commits?count=1 | 0.09 ms | 0.09 ms |
+| /commits?limit=10&ref=tokio-1.53.2 | 0.10 ms | 0.09 ms |
 
-The ~26 ms max on every endpoint is the first sample after the prime request
-(one-off scheduler/GC jitter); the median is stable at ~2 ms.
+All endpoints are cache hits after the prime request; thread count is
+irrelevant on the warm path.
 
 ## Per-rep cold and disk (ms)
 
-Cold (5 fresh-process reps after full cache wipe):
+Cold, 16 threads (5 fresh-process reps after full cache wipe):
 
 | range | rep0 | rep1 | rep2 | rep3 | rep4 |
 |---|---:|---:|---:|---:|---:|
-| rg91 | 24.2 | 36.9 | 23.0 | 28.1 | 19.1 |
-| rg252 | 48.8 | 58.9 | 47.2 | 53.9 | 30.1 |
-| tokio867 | 67.0 | 62.1 | 61.8 | 52.5 | 74.3 |
-| libuv495 | 49.0 | 47.2 | 51.6 | 35.8 | 38.4 |
-| stress2000 | 64.9 | 63.2 | 63.3 | 79.5 | 55.8 |
-| stressgiant | 17.8 | 18.6 | 21.5 | 33.9 | 16.3 |
-| million_add1M | 38.5 | 25.8 | 23.5 | 28.9 | 24.3 |
-| million_mod500k | 27.7 | 39.5 | 26.1 | 27.9 | 29.9 |
+| rg91 | 54.1 | 64.8 | 66.4 | 63.2 | 57.0 |
+| rg252 | 25.9 | 36.5 | 27.5 | 28.2 | 18.1 |
+| tokio867 | 43.0 | 30.3 | 29.8 | 42.3 | 28.0 |
+| libuv495 | 23.6 | 41.6 | 24.2 | 40.0 | 40.3 |
+| stress2000 | 35.1 | 32.3 | 31.5 | 32.4 | 32.0 |
+| stressgiant | 22.6 | 27.4 | 24.7 | 28.1 | 29.9 |
+| million_add1M | 61.4 | 70.7 | 68.7 | 70.8 | 70.0 |
+| million_mod500k | 14.1 | 32.2 | 22.9 | 22.9 | 14.4 |
 
-Disk (5 restarts, OID-keyed persistent cache):
+Cold, 1 thread:
 
 | range | rep0 | rep1 | rep2 | rep3 | rep4 |
 |---|---:|---:|---:|---:|---:|
-| rg91 | 4.6 | 6.7 | 4.3 | 6.4 | 3.5 |
-| rg252 | 2.5 | 23.6 | 3.7 | 1.5 | 2.0 |
-| tokio867 | 25.5 | 18.5 | 3.9 | 7.4 | 3.4 |
-| libuv495 | 15.0 | 26.9 | 4.5 | 18.6 | 4.0 |
-| stress2000 | 4.7 | 3.8 | 16.3 | 15.3 | 1.8 |
-| stressgiant | 4.3 | 2.6 | 2.3 | 2.8 | 1.5 |
-| million_add1M | 22.7 | 19.4 | 4.7 | 20.1 | 16.6 |
-| million_mod500k | 2.0 | 27.0 | 21.7 | 3.1 | 3.9 |
+| rg91 | 73.5 | 77.0 | 61.7 | 80.7 | 85.1 |
+| rg252 | 57.2 | 56.6 | 42.6 | 39.4 | 48.9 |
+| tokio867 | 122.0 | 100.5 | 118.5 | 126.7 | 146.2 |
+| libuv495 | 67.8 | 81.7 | 89.7 | 84.2 | 76.1 |
+| stress2000 | 203.1 | 208.2 | 233.1 | 227.4 | 218.6 |
+| stressgiant | 23.4 | 25.7 | 24.8 | 30.7 | 27.7 |
+| million_add1M | 116.5 | 123.9 | 120.8 | 121.5 | 105.5 |
+| million_mod500k | 91.6 | 76.0 | 77.9 | 83.3 | 90.6 |
 
-Disk hits include repo-open + two ref peels per request; the JSON body read
-itself is ≤1 ms for warm page cache. The spread is page-cache state after the
-restart, not cache logic.
+Disk (5 restarts, OID-keyed persistent cache) is dominated by repo-open + two
+ref peels per request (~2–60 ms depending on page-cache state); the JSON body
+read itself is ≤1 ms. Full per-rep disk numbers are in `BENCHMARKS-raw.txt`.
 
 ## Correctness vs git
 
@@ -136,17 +158,19 @@ Totals (files/additions/deletions) compared per range against
 
 ## Known gaps
 
-- **stress2000 cold is the narrowest win (1.93×)**: synthetic deep-delta chains
+- **rg91 cold loses to git (0.59–0.71×)**: 91 files is below the crossover
+  where xlr8's fixed repo-open + ref-peel cost is amortized. Warm is still 475×.
+- **stress2000 single-thread loses badly (0.26×)**: synthetic deep-delta chains
   (94% deltas, avg depth 12.7) — gix's pack reader has no equivalent of git's C
-  delta resolver. zlib-rs recovered ~34% of the gap; warm is still 58×.
-- **tokio867/libuv cold wins are 2.6–4.2×**, not the 6–8× of the million range —
-  real repos have rename-heavy corners where band estimation defers to full
-  Myers more often.
+  delta resolver. Multi-thread recovers to 1.81×; zlib-rs already took ~34% off.
+- **Single-thread cold is roughly at parity with git** (4/8 wins) — the
+  multi-thread default is what produces the large cold margins. This matches
+  the analysis in `docs/PERF-FINDINGS.md`.
 - **Disk-cache JSON is per-range**; a range never requested before a restart
   pays full cold cost.
 
 ## Historical: ARM/PRoot device
 
-The prior run (Poco X4 Pro 5G, aarch64, Termux→Ubuntu PRoot) is kept in git
+An earlier run (Poco X4 Pro 5G, aarch64, Termux→Ubuntu PRoot) is kept in git
 history. PRoot traps every syscall via ptrace, so those numbers are a pessimal
-floor — the Windows laptop above is 2–4× faster cold and 1.5–2× faster warm.
+floor — the Windows laptop above is 2–4× faster cold.

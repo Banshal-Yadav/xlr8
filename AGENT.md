@@ -49,7 +49,8 @@ src/server.rs    axum routes + response cache (serialized JSON per
 assets/index.html  UI (vanilla JS, tabs: Commits / Compare / Pulls)
 bench/gen_stress.sh  synthetic 2000-file fixture generator
 bench/gen_million.sh synthetic 1M-line-diff fixture generator
-bench/absbench.py    git/cold/disk/warm harness (6 ranges)
+bench/benchlib.py    shared harness helpers (server boot, keep-alive GET)
+bench/absbench.py    git/cold/disk/warm harness (6 ranges, --threads N)
 bench/million_bench.py  1M-line-diff harness
 bench/api_bench.py  endpoint latency harness
 docs/benchmark.md    full perf history + numbers

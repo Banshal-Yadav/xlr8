@@ -46,20 +46,24 @@ Flags: `--port <p>` (default 7782) · `--serve` (multi-repo, no repo arg) · `--
 Absolute benchmarks on the build device (Windows laptop — AMD Ryzen 7 7735HS,
 8C/16T, NVMe; medians, 100 warm reps). vs `git diff --numstat -M` on the same
 packed mirrors. Cold = first hit after process start + cache wipe; restart =
-OID-keyed disk cache after process restart; warm = in-memory repeat.
+OID-keyed disk cache after process restart; warm = in-memory repeat over a
+persistent connection.
 
-| Range | Files | git | xlr8 cold | xlr8 restart | xlr8 warm | warm vs git |
+| Range | Files | git | cold (16T) | cold (1T) | restart | warm |
 |---|---|---|---|---|---|---|
-| ripgrep 14.1..15.1 | 91 | 94 ms | 24 ms | 4.6 ms | 3.3 ms | **29×** |
-| ripgrep 0.1..15.2 | 252 | 124 ms | 49 ms | 2.5 ms | 2.2 ms | **56×** |
-| tokio 1.0..1.53 | 867 | 234 ms | 62 ms | 7.4 ms | 1.9 ms | **125×** |
-| libuv v1.0..v1.53 | 495 | 196 ms | 47 ms | 15 ms | 2.0 ms | **101×** |
-| stress 2000 files | 2000 | 122 ms | 63 ms | 4.7 ms | 2.1 ms | **59×** |
-| **+1,000,000 lines** | 2500 | 205 ms | 26 ms | 19 ms | 3.1 ms | **67×** |
+| ripgrep 14.1..15.1 | 91 | 45 ms | 63 ms | 77 ms | 57 ms | 0.09 ms |
+| ripgrep 0.1..15.2 | 252 | 65 ms | 28 ms | 49 ms | 1.9 ms | 0.11 ms |
+| tokio 1.0..1.53 | 867 | 115 ms | 30 ms | 122 ms | 4.4 ms | 0.12 ms |
+| libuv v1.0..v1.53 | 495 | 93 ms | 40 ms | 82 ms | 2.7 ms | 0.11 ms |
+| stress 2000 files | 2000 | 59 ms | 32 ms | 219 ms | 13 ms | 0.15 ms |
+| **+1,000,000 lines** | 2500 | 121 ms | 70 ms | 121 ms | 57 ms | 0.19 ms |
 
-Every range shown beats git warm; **all beat git even cold** (1.9–7.9×). A
-**1-million-line diff** computes in ~26 ms cold and serves in **~3 ms warm /
-~19 ms after a full restart** (persistent OID-keyed compare cache — survives
+**Warm is ~0.1 ms on every range** (in-memory cache hit — what a browser sees
+on a repeat view). Cold with the 16-thread default beats git on 7/8 ranges
+(1.7–4.8×); single-threaded (`XLR8_THREADS=1`) is the honest equal-cores
+comparison and wins 4/8 — xlr8's cold margin is largely parallelism. A
+**1-million-line diff** computes in ~70 ms cold and serves in **~0.2 ms warm /
+~57 ms after a full restart** (persistent OID-keyed compare cache — survives
 restarts, no invalidation needed). Totals are exact on every synthetic range
 and within 0.12% on real repos. Full 8-range tables, per-rep numbers,
 methodology, and correctness notes: `docs/BENCHMARKS.md`.

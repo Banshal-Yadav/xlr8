@@ -5,12 +5,9 @@ Protocol (matches docs/BENCHMARKS.md):
   git    : `git --git-dir=<mirror> diff --numstat -M <base> <head>`, median of N.
   cold   : kill server, delete every <mirror>.cmp, restart, first HTTP hit per range.
   disk   : kill server (cmp kept), restart, first HTTP hit per range (OID-keyed cache).
-  warm   : in-memory repeat x100, median/min/max.
+  warm   : in-memory repeat x100 over a persistent connection, median/min/max.
 
-The server is booted with a single tiny repo arg (stress/big) so boot pays one
-sync (~1.2s) instead of `--serve`'s six; it still serves every mirror by path.
-
-Usage: python bench/absbench.py [--warm 100] [--reps 5] [--port 8902]
+Usage: python bench/absbench.py [--warm 100] [--reps 5] [--threads N] [--port 8902]
 """
 import argparse
 import json
@@ -19,11 +16,9 @@ import shutil
 import statistics
 import subprocess
 import time
-import urllib.request
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BIN = os.path.join(ROOT, "target", "release", "xlr8.exe")
-MIRRORS = os.path.join(os.environ.get("LOCALAPPDATA", ""), "xlr8", "mirrors")
+from benchlib import (ROOT, KeepAlive, cmp_dir, http_get, mirror_path,
+                      start_server, stop_server)
 
 # tag, mirror slug, owner, repo, base, head
 RANGES = [
@@ -35,47 +30,6 @@ RANGES = [
     ("stress2000",  "stress_big.git",         "stress",    "big",     "refs/tags/base", "refs/tags/head"),
     ("stressgiant", "stress_big.git",         "stress",    "big",     "refs/tags/base", "refs/tags/head2"),
 ]
-
-
-def mirror_path(slug):
-    return os.path.join(MIRRORS, slug)
-
-
-def cmp_dir(slug):
-    return mirror_path(slug) + ".cmp"
-
-
-def start_server(port):
-    proc = subprocess.Popen(
-        [BIN, "stress/big", "--port", str(port), "--no-open"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 60
-    while time.time() < deadline:
-        if proc.poll() is not None:
-            raise RuntimeError("server exited during boot")
-        try:
-            with urllib.request.urlopen(base + "/api/repos", timeout=2) as r:
-                if r.status == 200:
-                    return proc, base
-        except Exception:
-            time.sleep(0.1)
-    proc.kill()
-    raise RuntimeError("server did not become ready")
-
-
-def stop_server(proc):
-    if proc and proc.poll() is None:
-        proc.kill()
-        proc.wait()
-
-
-def http_get(url):
-    t0 = time.perf_counter()
-    with urllib.request.urlopen(url, timeout=180) as r:
-        body = r.read()
-    return (time.perf_counter() - t0) * 1000.0, body
 
 
 def git_numstat(slug, base, head):
@@ -111,16 +65,19 @@ def main():
     ap.add_argument("--warm", type=int, default=100)
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--port", type=int, default=8902)
+    ap.add_argument("--threads", type=int, default=None,
+                    help="XLR8_THREADS for the server (default: unset = all cores)")
     args = ap.parse_args()
 
-    log = open(os.path.join(ROOT, "docs", "BENCHMARKS-raw.txt"), "w", encoding="utf-8")
+    log = open(os.path.join(ROOT, "docs", "BENCHMARKS-raw.txt"), "a", encoding="utf-8")
 
     def emit(s):
         print(s, flush=True)
         log.write(s + "\n")
         log.flush()
 
-    emit(f"# xlr8 absbench  warm={args.warm} reps={args.reps}  {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    emit("")
+    emit(f"# xlr8 absbench  warm={args.warm} reps={args.reps} threads={args.threads or 'default'}  {time.strftime('%Y-%m-%d %H:%M:%S')}")
     emit(f"# device: {os.environ.get('PROCESSOR_IDENTIFIER', '?')}")
 
     # ---- git baselines ----
@@ -139,7 +96,7 @@ def main():
         # cold: wipe every cmp, restart, first hit per range
         for _, slug, *_ in RANGES:
             shutil.rmtree(cmp_dir(slug), ignore_errors=True)
-        proc, base_url = start_server(args.port)
+        proc, base_url = start_server(args.port, args.threads)
         try:
             for tag, slug, owner, repo, base, head in RANGES:
                 url = f"{base_url}/api/{owner}/{repo}/diff?base={base}&head={head}"
@@ -150,7 +107,7 @@ def main():
         finally:
             stop_server(proc)
         # disk: keep cmp, restart, first hit per range
-        proc, base_url = start_server(args.port)
+        proc, base_url = start_server(args.port, args.threads)
         try:
             for tag, slug, owner, repo, base, head in RANGES:
                 url = f"{base_url}/api/{owner}/{repo}/diff?base={base}&head={head}"
@@ -160,17 +117,19 @@ def main():
         finally:
             stop_server(proc)
 
-    # ---- warm: one boot, all ranges x100 ----
-    proc, base_url = start_server(args.port)
+    # ---- warm: one boot, all ranges x100 over a persistent connection ----
+    proc, base_url = start_server(args.port, args.threads)
+    ka = KeepAlive(args.port)
     try:
         for tag, slug, owner, repo, base, head in RANGES:
-            url = f"{base_url}/api/{owner}/{repo}/diff?base={base}&head={head}"
-            http_get(url)  # prime
-            warm = [http_get(url)[0] for _ in range(args.warm)]
+            path = f"/api/{owner}/{repo}/diff?base={base}&head={head}"
+            ka.get(path)  # prime
+            warm = [ka.get(path)[0] for _ in range(args.warm)]
             results[tag]["warm"] = warm
             emit(f"  WARM {tag:14s} n={args.warm} med={statistics.median(warm):7.2f}ms "
                  f"min={min(warm):7.2f} max={max(warm):7.2f}")
     finally:
+        ka.close()
         stop_server(proc)
 
     # ---- summary ----
