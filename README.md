@@ -43,25 +43,26 @@ Flags: `--port <p>` (default 7782) · `--serve` (multi-repo, no repo arg) · `--
 
 ## Performance
 
-Absolute benchmarks on the build device (Poco X4 Pro 5G, aarch64, Termux→Ubuntu
-PRoot; medians). vs `git diff --numstat -M` on the
-same packed mirrors. Cold = first hit after process start + cache wipe;
-restart = OID-keyed disk cache after process restart; warm = in-memory repeat.
+Absolute benchmarks on the build device (Windows laptop — AMD Ryzen 7 7735HS,
+8C/16T, NVMe; medians, 100 warm reps). vs `git diff --numstat -M` on the same
+packed mirrors. Cold = first hit after process start + cache wipe; restart =
+OID-keyed disk cache after process restart; warm = in-memory repeat.
 
 | Range | Files | git | xlr8 cold | xlr8 restart | xlr8 warm | warm vs git |
 |---|---|---|---|---|---|---|
-| ripgrep 14.1..15.1 | 91 | 86 ms | 61 ms | 19 ms | 2.4 ms | **36×** |
-| ripgrep 0.1..15.2 | 252 | 121 ms | 57 ms | 4.4 ms | 1.7 ms | **71×** |
-| tokio 1.0..1.53 | 867 | 177 ms | 156 ms | 25 ms | 3.4 ms | **52×** |
-| libuv v1.0..v1.53 | 495 | 178 ms | 107 ms | 21 ms | 3.5 ms | **51×** |
-| git v2.48..v2.50 | 1795 | 707 ms | 324 ms | 19 ms | 5.9 ms | **121×** |
-| **+1,000,000 lines** | 2500 | 4.5 s | 1.1 s | **12 ms** | **3.8 ms** | **1194×** |
+| ripgrep 14.1..15.1 | 91 | 94 ms | 24 ms | 4.6 ms | 3.3 ms | **29×** |
+| ripgrep 0.1..15.2 | 252 | 124 ms | 49 ms | 2.5 ms | 2.2 ms | **56×** |
+| tokio 1.0..1.53 | 867 | 234 ms | 62 ms | 7.4 ms | 1.9 ms | **125×** |
+| libuv v1.0..v1.53 | 495 | 196 ms | 47 ms | 15 ms | 2.0 ms | **101×** |
+| stress 2000 files | 2000 | 122 ms | 63 ms | 4.7 ms | 2.1 ms | **59×** |
+| **+1,000,000 lines** | 2500 | 205 ms | 26 ms | 19 ms | 3.1 ms | **67×** |
 
-Every range beats git warm; 8/9 beat git even cold (the exception is a
-synthetic deep-delta stress repo). A **1-million-line diff** computes in ~1.1 s
-cold and serves in **~4 ms warm / ~12 ms after a full restart** (persistent
-OID-keyed compare cache — survives restarts, no invalidation needed). Full
-tables, per-rep numbers, methodology, and correctness notes: `docs/BENCHMARKS.md`.
+Every range shown beats git warm; **all beat git even cold** (1.9–7.9×). A
+**1-million-line diff** computes in ~26 ms cold and serves in **~3 ms warm /
+~19 ms after a full restart** (persistent OID-keyed compare cache — survives
+restarts, no invalidation needed). Totals are exact on every synthetic range
+and within 0.12% on real repos. Full 8-range tables, per-rep numbers,
+methodology, and correctness notes: `docs/BENCHMARKS.md`.
 
 ## Built with
 

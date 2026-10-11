@@ -1,6 +1,3 @@
 /target
 *.log
 *.err
-.overnight-backup/
-.fix-backup/
-.ab/

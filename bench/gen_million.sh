@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Synthetic 1M-line-diff repo: base + two heads (pure-add 1M lines; mod 1M changed lines).
 set -euo pipefail
-DIR="${1:-/tmp/opencode/million-src}"
+DIR="${1:-./million-src}"
 rm -rf "$DIR"; mkdir -p "$DIR"; cd "$DIR"
 git init -q -b main
 git config user.email bench@xlr8; git config user.name bench

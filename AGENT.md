@@ -31,6 +31,7 @@ xlr8 --serve              # re-serve previously opened repos
 ## Layout
 
 ```
+AGENT.md         this file (project guide for AI agents)
 src/main.rs      CLI (hand-rolled, no clap), startup, serve loop
 src/cli.rs       arg parsing + usage text
 src/mirror.rs    RepoRef parse (URL or owner/repo), clone/fetch (shells out
@@ -47,8 +48,14 @@ src/server.rs    axum routes + response cache (serialized JSON per
                  mirror+request, cleared on sync) + TCP_NODELAY + embedded UI
 assets/index.html  UI (vanilla JS, tabs: Commits / Compare / Pulls)
 bench/gen_stress.sh  synthetic 2000-file fixture generator
+bench/gen_million.sh synthetic 1M-line-diff fixture generator
+bench/absbench.py    git/cold/disk/warm harness (6 ranges)
+bench/million_bench.py  1M-line-diff harness
+bench/api_bench.py  endpoint latency harness
 docs/benchmark.md    full perf history + numbers
+docs/BENCHMARKS.md   absolute benchmarks (all ranges, per-rep)
 docs/PERF-FINDINGS.md  single-threaded analysis + how to beat git per-core
+docs/PERF-TUNING.md  tuning log for the three optimizations
 ```
 
 Naming history: crate name `xlr8` was chosen after checking crates.io

@@ -1,11 +1,17 @@
-# Performance night — 2026-10-11
+# Performance tuning log — 2026-10-11
 
-Overnight session executing `docs/PERF-FINDINGS.md` recommendations. All
-numbers below are raw measurements on the ARM/PRoot device (pessimal floor —
-laptop numbers are 3–10× better); no commits were made, changes are working-tree
-only. Method: cold process per sample (`XLR8_THREADS=1`, kill + restart between
-samples), `curl` wall-clock including HTTP+JSON, git baseline =
-`git diff --numstat -M` wall, medians of 3.
+> **Re-verified 2026-10-11 (Windows laptop, AMD Ryzen 7 7735HS):** the full
+> 8-range harness was re-run at 100 warm reps / 5 cold+disk reps on the build
+> laptop. All three features hold: cold beats git on **all 8 ranges** (1.9–7.9×),
+> warm medians ≤3.3 ms, 1M-line diff 3.1 ms warm / 19 ms after restart. Fresh
+> tables: `docs/BENCHMARKS.md`; raw log: `docs/BENCHMARKS-raw.txt`. The ARM/PRoot
+> numbers below remain as the original tuning record.
+
+Tuning log for the three optimizations in `docs/PERF-FINDINGS.md`. All numbers
+below are raw measurements on the ARM/PRoot device (pessimal floor — laptop
+numbers are 3–10× better). Method: cold process per sample (`XLR8_THREADS=1`,
+kill + restart between samples), `curl` wall-clock including HTTP+JSON, git
+baseline = `git diff --numstat -M` wall, medians of 3.
 
 ## TL;DR
 
@@ -158,20 +164,19 @@ use. Sources: [repo README](https://github.com/openai/math),
   (cache intermediate bases — the pack cache only stores chain endpoints).
 - **tokio T=1 (0.75×)**: renames+stats both pay full blob inflation serially;
   multi-thread (default) already beats git here (151 ms vs ≈190 ms).
-- **walk phase tail** (occasionally 30–44 ms on tokio cold runs on this box):
-  tree diff + ref peeling; not investigated tonight.
+- **walk phase tail** (occasionally 30–44 ms on tokio cold runs):
+  tree diff + ref peeling; not investigated.
 - **git baseline variance on this device is large** (libuv git median swung
   151→561 ms between interleaved runs — page-cache eviction from repeated
   boots). All claims use medians of ≥3 and same-session interleaving where
   the comparison matters (band on/off used the identical binary).
-- Persistent on-disk blob cache (`PERF-FINDINGS` #2) not implemented tonight.
+- Persistent on-disk blob cache (`PERF-FINDINGS` #2) not implemented.
 
 ## 7. Multi-thread (default) old-vs-new A/B
 
-Old binary rebuilt from `git archive HEAD` (pre-night code) into
-`/tmp/opencode/xlr8_old`; new = working-tree build. Interleaved order
-(old,new / new,old / old,new), 3 cold-process reps per binary per range,
-medians; git = median of 3. Device = same ARM/PRoot box.
+Old binary rebuilt from `git archive HEAD` (pre-optimization code); new =
+current build. Interleaved order (old,new / new,old / old,new), 3 cold-process
+reps per binary per range, medians; git = median of 3. Device = same ARM/PRoot box.
 
 ```
 RESULT rg91         old=['80','70','56']  med=  70ms | new=['47','48','49']  med=  48ms | git=  79ms | vs_old=1.47x | vs_git old=1.12x new=1.65x
@@ -184,17 +189,16 @@ RESULT stress2000   old=['331','421','401'] med=401ms | new=['177','194','225'] 
 Multi-thread: **every range faster than old** (1.06–2.07×); ranges beating
 git multi went 3/5 → 4/5 (rg252 and tokio flipped from ~0.95× to 1.16–1.69×).
 stress2000 doubled (zlib-rs) but still loses to git's C delta resolver
-(0.35×) — the documented remaining gap. Raw log: `/tmp/opencode/mt_ab2.txt`.
+(0.35×) — the documented remaining gap.
 
-## 8. Files touched (working tree, NOT committed)
+## 8. Files touched
 
 - `src/rewrite.rs` — band constants, `fx64`, `line_hashes` tokens,
   `similarity_estimate`, band gate + counters, kill-switch
 - `Cargo.toml` / `Cargo.lock` — flate2 zlib-rs backend line
-- `docs/PERF-NIGHT.md` — this file
+- `docs/PERF-TUNING.md` — this file
 
-Build: `cargo build --release --offline`, **0 warnings** (`/tmp/opencode/night_build2.log`).
-Server left running on `http://127.0.0.1:8900` with the new binary.
+Build: `cargo build --release --offline`, **0 warnings**.
 
 ## 9. Million-line diff in milliseconds (1M-line range)
 
@@ -210,7 +214,7 @@ milliseconds come from **not recomputing**: compare responses are immutable
 functions of two commit OIDs (objects never change), so they can be cached
 on disk forever with zero invalidation logic.
 
-### Implementation (working tree, NOT committed)
+### Implementation
 
 - `src/server.rs` — persistent compare cache: `cmp_dir`/`cmp_disk_get`/
   `cmp_disk_put`; bodies ≤16 MiB stored as raw JSON under
@@ -243,6 +247,4 @@ warm-ref disk hits ~12 ms. In-memory repeat: **~1600× faster than git**.
 
 Regression checks after change: unknown-ref 404 preserved
 (`unknown ref: nope`); per-file hunks on million repo 43 ms; tokio
-HEAD~50..HEAD 228 ms (190 files); 0-warning build
-(`/tmp/opencode/build_full.log`). Raw numbers: this section + shell logs
-`/tmp/opencode/million_truth.txt`, `r8900_*.log`.
+HEAD~50..HEAD 228 ms (190 files); 0-warning build.
