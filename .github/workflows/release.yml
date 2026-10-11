@@ -1,0 +1,37 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: linux-x86_64
+          - os: windows-latest
+            name: windows-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - name: Package (linux)
+        if: runner.os == 'Linux'
+        run: |
+          tar -czf xlr8-${{ github.ref_name }}-${{ matrix.name }}.tar.gz -C target/release xlr8
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path target/release/xlr8.exe -DestinationPath xlr8-${{ github.ref_name }}-${{ matrix.name }}.zip
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            xlr8-*.tar.gz
+            xlr8-*.zip
