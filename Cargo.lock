@@ -2388,6 +2388,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "flate2",
  "gix",
  "imara-diff",
  "serde",

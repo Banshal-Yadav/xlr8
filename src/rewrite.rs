@@ -6,43 +6,69 @@ use std::sync::Arc;
 
 const PERCENTAGE: f32 = 0.5;
 const RENAME_LIMIT: usize = 32767;
-/// multiset pre-filter threshold: lower than PERCENTAGE so we never skip a
-/// pair that Myers could have scored ≥ PERCENTAGE (conservative recall)
-const PRE_FILTER: f32 = PERCENTAGE * 0.6;
+/// git-style hash-estimate band: below EST_LOW the Myers score cannot reach
+/// PERCENTAGE (estimate ≥ Myers once tokens match imara's exactly);
+/// at/above EST_HIGH the byte-weighted hash estimate IS the decision —
+/// same as git's diffcore_count_changes scoring, which never runs a diff.
+const EST_LOW: f32 = PERCENTAGE;
+const EST_HIGH: f32 = 0.70;
 
-fn line_hashes(data: &[u8]) -> Vec<u64> {
-    use std::hash::{Hash, Hasher};
-    data.split(|&b| b == b'\n')
-        .filter(|l| !l.is_empty())
-        .map(|l| {
-            let mut h = std::collections::hash_map::DefaultHasher::new();
-            l.hash(&mut h);
-            h.finish()
-        })
+/// XLR8_RENAME_MYS=1 → score every surviving pair with Myers (pre-band behavior)
+fn myers_only() -> bool {
+    static X: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *X.get_or_init(|| {
+        std::env::var_os("XLR8_RENAME_MYS")
+            .is_some_and(|v| !v.is_empty() && v != "0")
+    })
+}
+
+/// (hash, byte-len) per line, terminator kept, empty lines included —
+/// exactly the token partition imara_diff interns, so the estimate bounds
+/// the Myers score below. Fx-style rolling hash: SipHash measured ~40 ms of
+/// the renames phase on 252-file ranges (PRoot); this is ~10× cheaper and
+/// collisions only shift estimate bytes, never correctness of accepted diffs.
+fn line_hashes(data: &[u8]) -> Vec<(u64, u32)> {
+    data.split_inclusive(|&b| b == b'\n')
+        .map(|l| (fx64(l), l.len() as u32))
         .collect()
 }
 
-fn multiset_similarity(a: &[u64], b: &[u64]) -> f32 {
-    if a.is_empty() && b.is_empty() {
+/// FxHasher core (multiply-rotate-xor, constant seed) over one line.
+fn fx64(data: &[u8]) -> u64 {
+    const SEED: u64 = 0x517c_c1b7_2722_0a95;
+    let mut h = SEED;
+    for &b in data {
+        h = (h.rotate_left(5) ^ u64::from(b)).wrapping_mul(SEED);
+    }
+    h.wrapping_add(data.len() as u64)
+}
+
+/// git-style one-sided byte-weighted similarity estimate:
+/// matched = Σ_h min(count_a, count_b) · len(line_h); est = matched / max(len).
+/// Identical-content lines share a hash, so Myers-kept bytes ⊆ matched bytes
+/// ⇒ est ≥ Myers-sim for every pair (skip below 0.5 is lossless).
+fn similarity_estimate(a: &[(u64, u32)], b: &[(u64, u32)], a_len: usize, b_len: usize) -> f32 {
+    let max_len = a_len.max(b_len);
+    if max_len == 0 {
         return 1.0;
     }
-    if a.is_empty() || b.is_empty() {
+    if a_len == 0 || b_len == 0 {
         return 0.0;
     }
-    let mut counts: HashMap<u64, i32> = HashMap::with_capacity(a.len());
-    for &h in a {
+    let mut counts: HashMap<u64, u32> = HashMap::with_capacity(a.len());
+    for &(h, _) in a {
         *counts.entry(h).or_default() += 1;
     }
-    let mut matches = 0usize;
-    for &h in b {
+    let mut matched = 0u64;
+    for &(h, l) in b {
         if let Some(c) = counts.get_mut(&h) {
             if *c > 0 {
                 *c -= 1;
-                matches += 1;
+                matched += l as u64;
             }
         }
     }
-    2.0 * matches as f32 / (a.len() + b.len()) as f32
+    matched as f32 / max_len as f32
 }
 
 struct Item {
@@ -129,11 +155,13 @@ fn score_part(
     let mut input: imara_diff::intern::InternedInput<&[u8]> = Default::default();
     let mut src_ids: HashMap<usize, Vec<imara_diff::intern::Token>> = HashMap::new();
     let mut out: Vec<(usize, usize, f32)> = Vec::new();
+    let (mut est_skip, mut est_accept, mut myers_runs) = (0usize, 0usize, 0usize);
 
-    // pre-compute line hashes for multiset pre-filter: skip Myers for pairs
-    // that clearly can't reach 50% similarity
-    let mut dest_hashes: HashMap<usize, Vec<u64>> = HashMap::new();
-    let mut src_hashes: HashMap<usize, Vec<u64>> = HashMap::new();
+    // byte-weighted hash estimate per file (git's diffcore_count_changes
+    // shape): decides most pairs outright; only pairs in [EST_LOW, EST_HIGH)
+    // pay a Myers diff
+    let mut dest_hashes: HashMap<usize, Vec<(u64, u32)>> = HashMap::new();
+    let mut src_hashes: HashMap<usize, Vec<(u64, u32)>> = HashMap::new();
     for (di, did, dmode) in &part {
         if dmode.is_blob() {
             if let Some((bytes, bin)) = blobs.get(did) {
@@ -171,12 +199,6 @@ fn score_part(
             if same_dir_only && dirs[*si] != dirs[*di] {
                 continue;
             }
-            // multiset pre-filter: skip Myers for pairs with low line overlap
-            if let (Some(dh), Some(sh)) = (dest_hashes.get(di), src_hashes.get(si)) {
-                if multiset_similarity(dh, sh) < PRE_FILTER {
-                    continue;
-                }
-            }
             let Some((sbytes, sbin)) = blobs.get(sid) else {
                 continue;
             };
@@ -187,6 +209,21 @@ fn score_part(
             if sbytes.len().min(dbytes.len()) * 2 < sbytes.len().max(dbytes.len()) {
                 continue;
             }
+            if !myers_only() {
+                if let (Some(dh), Some(sh)) = (dest_hashes.get(di), src_hashes.get(si)) {
+                    let est = similarity_estimate(dh, sh, dbytes.len(), sbytes.len());
+                    if est < EST_LOW {
+                        est_skip += 1;
+                        continue;
+                    }
+                    if est >= EST_HIGH {
+                        est_accept += 1;
+                        out.push((*di, *si, est));
+                        continue;
+                    }
+                }
+            }
+            myers_runs += 1;
             if let Some(ids) = src_ids.get(si) {
                 input.after.clear();
                 input.after.extend_from_slice(ids);
@@ -210,6 +247,13 @@ fn score_part(
             }
         }
     }
+    crate::debug!(
+        "rename-score part: {} pairs, est-skip {}, est-accept {}, myers {}",
+        out.len(),
+        est_skip,
+        est_accept,
+        myers_runs
+    );
     out
 }
 

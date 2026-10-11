@@ -72,6 +72,19 @@ pub(crate) fn commit_of<'r>(repo: &'r gix::Repository, spec: &str) -> Result<gix
         .with_context(|| format!("{spec} is not a commit"))
 }
 
+/// Resolve a base/head spec pair to immutable commit ids (cache keys).
+pub(crate) fn resolve_ids(
+    mirror: &std::path::Path,
+    base: &str,
+    head: &str,
+) -> Result<(gix::ObjectId, gix::ObjectId)> {
+    let tsr = crate::repo::get(mirror)?;
+    let repo = crate::repo::handle(&tsr);
+    let b = commit_of(&repo, base)?.id;
+    let h = commit_of(&repo, head)?.id;
+    Ok((b, h))
+}
+
 fn blob_bytes(
     mirror: &std::path::Path,
     repo: &gix::Repository,

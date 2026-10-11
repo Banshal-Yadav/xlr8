@@ -3,6 +3,11 @@
 Investigation date: 2026-10-08. Measured on the Windows laptop (AMD Ryzen 7
 7735HS, 8C/16T, NVMe), release binary, packed mirrors, warm page cache.
 
+> **Update 2026-10-11:** bottleneck #2 (rename scoring) is fixed — git-style
+> hash-band scoring, see `docs/PERF-NIGHT.md` (Myers runs per compare: tokio
+> ~9650 → 15; parity vs `git -M` unchanged). Bottleneck #1 mitigated via
+> flate2/zlib-rs (−34 % inflate on the synthetic stress pack).
+
 ## TL;DR
 
 xlr8 currently beats git **only because it uses 16 threads** where git uses 1.

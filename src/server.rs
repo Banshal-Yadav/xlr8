@@ -47,6 +47,43 @@ fn resp_get(key: &str) -> Option<Bytes> {
     RESP.get()?.lock().ok()?.map.get(key).cloned()
 }
 
+// ─── persistent compare cache ────────────────────────────────────────────────
+// Compare responses keyed by resolved commit OIDs (immutable) on disk next to
+// each mirror — survives restarts, no invalidation needed (objects immutable).
+// Bodies ≤16 MiB; bigger stays memory-only. Atomic tmp→rename write.
+
+const CMP_CAP: usize = 16 << 20;
+
+fn cmp_dir(mirror: &std::path::Path) -> std::path::PathBuf {
+    let mut p = mirror.as_os_str().to_owned();
+    p.push(".cmp");
+    std::path::PathBuf::from(p)
+}
+
+fn cmp_disk_get(dir: &std::path::Path, base: &gix::ObjectId, head: &gix::ObjectId) -> Option<Vec<u8>> {
+    let name = format!("{base}_{head}.json");
+    std::fs::read(dir.join(name)).ok()
+}
+
+fn cmp_disk_put(
+    dir: &std::path::Path,
+    base: &gix::ObjectId,
+    head: &gix::ObjectId,
+    body: &[u8],
+) {
+    if body.len() > CMP_CAP {
+        return;
+    }
+    if std::fs::create_dir_all(dir).is_err() {
+        return;
+    }
+    let name = format!("{base}_{head}.json");
+    let tmp = dir.join(format!("{name}.tmp"));
+    if std::fs::write(&tmp, body).is_ok() {
+        let _ = std::fs::rename(&tmp, dir.join(name));
+    }
+}
+
 fn resp_put(key: String, body: Vec<u8>) -> Bytes {
     let bytes = Bytes::from(body);
     let c = RESP.get_or_init(|| {
@@ -429,8 +466,17 @@ async fn diff_summary(
     }
     let (base, head) = (q.base.clone(), q.head.clone());
     let body = tokio::task::spawn_blocking(move || {
+        // Disk cache: key by resolved commit OIDs (immutable, safe across syncs).
+        // A memory miss after restart hits disk in single-digit ms.
+        let (bid, hid) = diff::resolve_ids(&path, &base, &head)?;
+        let dir = cmp_dir(&path);
+        if let Some(b) = cmp_disk_get(&dir, &bid, &hid) {
+            return anyhow::Ok(b);
+        }
         let summary = diff::compare(&path, &base, &head)?;
-        serde_json::to_vec(&summary).map_err(anyhow::Error::from)
+        let body = serde_json::to_vec(&summary).map_err(anyhow::Error::from)?;
+        cmp_disk_put(&dir, &bid, &hid, &body);
+        anyhow::Ok(body)
     })
     .await
     .map_err(|e| api_err(e.into()))?

@@ -11,6 +11,10 @@ axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "io-util"] }
 gix = { version = "0.70", default-features = false, features = ["basic", "max-performance-safe"] }
 imara-diff = { version = "0.1", default-features = false }
+# force flate2's pure-Rust zlib-rs backend over miniz_oxide (gix pulls flate2
+# with rust_backend; unification keeps both features on and flate2's cfg
+# prefers zlib-rs whenever no C zlib is selected)
+flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
 ureq = { version = "3", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
