@@ -33,6 +33,7 @@ const RESP_CAP: usize = 32 << 20;
 struct RespCache {
     map: HashMap<String, Bytes>,
     bytes: usize,
+    generation: u64,
 }
 static RESP: OnceLock<Mutex<RespCache>> = OnceLock::new();
 
@@ -41,6 +42,19 @@ fn resp_key(path: &std::path::Path, rest: &str) -> String {
     k.push('\0');
     k.push_str(rest);
     k
+}
+
+fn resp_generation() -> u64 {
+    RESP.get_or_init(|| {
+        Mutex::new(RespCache {
+            map: HashMap::new(),
+            bytes: 0,
+            generation: 0,
+        })
+    })
+    .lock()
+    .map(|g| g.generation)
+    .unwrap_or(0)
 }
 
 fn resp_get(key: &str) -> Option<Bytes> {
@@ -60,17 +74,16 @@ fn cmp_dir(mirror: &std::path::Path) -> std::path::PathBuf {
     std::path::PathBuf::from(p)
 }
 
-fn cmp_disk_get(dir: &std::path::Path, base: &gix::ObjectId, head: &gix::ObjectId) -> Option<Vec<u8>> {
+fn cmp_disk_get(
+    dir: &std::path::Path,
+    base: &gix::ObjectId,
+    head: &gix::ObjectId,
+) -> Option<Vec<u8>> {
     let name = format!("{base}_{head}.json");
     std::fs::read(dir.join(name)).ok()
 }
 
-fn cmp_disk_put(
-    dir: &std::path::Path,
-    base: &gix::ObjectId,
-    head: &gix::ObjectId,
-    body: &[u8],
-) {
+fn cmp_disk_put(dir: &std::path::Path, base: &gix::ObjectId, head: &gix::ObjectId, body: &[u8]) {
     if body.len() > CMP_CAP {
         return;
     }
@@ -85,11 +98,16 @@ fn cmp_disk_put(
 }
 
 fn resp_put(key: String, body: Vec<u8>) -> Bytes {
+    resp_put_if_current(key, body, None)
+}
+
+fn resp_put_if_current(key: String, body: Vec<u8>, generation: Option<u64>) -> Bytes {
     let bytes = Bytes::from(body);
     let c = RESP.get_or_init(|| {
         Mutex::new(RespCache {
             map: HashMap::new(),
             bytes: 0,
+            generation: 0,
         })
     });
     if bytes.len() > RESP_CAP {
@@ -98,6 +116,9 @@ fn resp_put(key: String, body: Vec<u8>) -> Bytes {
     let Ok(mut g) = c.lock() else {
         return bytes;
     };
+    if generation.is_some_and(|expected| expected != g.generation) {
+        return bytes;
+    }
     if g.bytes + bytes.len() > RESP_CAP {
         g.map.clear();
         g.bytes = 0;
@@ -115,6 +136,7 @@ pub(crate) fn clear_resp_cache(path: &std::path::Path) {
     let Ok(mut g) = c.lock() else {
         return;
     };
+    g.generation = g.generation.wrapping_add(1);
     let prefix = format!("{}\0", path.to_string_lossy());
     g.map.retain(|k, _| !k.starts_with(&prefix));
     g.bytes = g.map.values().map(|v| v.len()).sum();
@@ -252,7 +274,11 @@ fn sys_stats() -> (u64, u64) {
 
     extern "system" {
         fn GetCurrentProcess() -> isize;
-        fn GetProcessMemoryInfo(process: isize, counters: *mut ProcessMemoryCounters, cb: u32) -> i32;
+        fn GetProcessMemoryInfo(
+            process: isize,
+            counters: *mut ProcessMemoryCounters,
+            cb: u32,
+        ) -> i32;
         fn GetProcessTimes(
             process: isize,
             creation: *mut FileTime,
@@ -339,10 +365,7 @@ async fn refs(
     Path((owner, repo)): Path<(String, String)>,
     Query(q): Query<RefsQuery>,
 ) -> Result<Response, (StatusCode, String)> {
-    let r = mirror::RepoRef {
-        owner,
-        name: repo,
-    };
+    let r = mirror::RepoRef { owner, name: repo };
     let path = mirror::mirror_path(&r);
     let key = resp_key(&path, "refs");
     if q.fresh.as_deref() != Some("1") {
@@ -543,6 +566,7 @@ async fn search(
             return Ok(json_body(b));
         }
     }
+    let generation = resp_generation();
     let query = q.q.clone();
     let body = tokio::task::spawn_blocking(move || {
         let sr = search::search(&path, &refspec, &query)?;
@@ -551,7 +575,7 @@ async fn search(
     .await
     .map_err(|e| api_err(e.into()))?
     .map_err(api_err)?;
-    Ok(json_body(resp_put(key, body)))
+    Ok(json_body(resp_put_if_current(key, body, Some(generation))))
 }
 
 #[derive(Deserialize)]
@@ -610,11 +634,9 @@ fn api_err(e: anyhow::Error) -> (StatusCode, String) {
 pub async fn serve(state: AppState, port: Option<u16>) -> anyhow::Result<SocketAddr> {
     use axum::serve::{Listener, ListenerExt};
     let addr = SocketAddr::from(([127, 0, 0, 1], port.unwrap_or(0)));
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await?
-        .tap_io(|s| {
-            let _ = s.set_nodelay(true);
-        });
+    let listener = tokio::net::TcpListener::bind(addr).await?.tap_io(|s| {
+        let _ = s.set_nodelay(true);
+    });
     let local = listener.local_addr()?;
     tokio::spawn(async move {
         let _ = axum::serve(listener, router(state)).await;

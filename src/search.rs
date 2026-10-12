@@ -18,7 +18,7 @@ const GREP_BUDGET: Duration = Duration::from_millis(1200);
 const MAX_FILES_OUT: usize = 200;
 const MAX_HITS_OUT: usize = 200;
 const MAX_HITS_PER_FILE: usize = 5;
-const BLOB_VIEW_MAX: usize = 512 << 10;
+const BLOB_VIEW_MAX: usize = MAX_FILE as usize;
 /// distinct refs whose indexes stay resident (each ~45k × ~60 B on git.git)
 const IDX_CAP: usize = 4;
 
@@ -51,6 +51,7 @@ pub struct LineHit {
 pub struct SearchResp {
     pub took_ms: u128,
     pub files: usize,
+    pub content_files: usize,
     pub shown: usize,
     pub hits: Vec<FileHit>,
     pub matches: Vec<LineHit>,
@@ -186,13 +187,17 @@ fn parse(q: &str) -> Parsed {
             Some(r) if !r.is_empty() => (true, r),
             _ => (false, raw),
         };
-        if let Some(v) = w.strip_prefix("ext:") {
-            let e = v.trim_start_matches('.').to_ascii_lowercase().into_bytes();
+        let lower = w.to_ascii_lowercase();
+        if let Some(v) = lower.strip_prefix("ext:") {
+            let e = v.trim_start_matches('.').as_bytes().to_vec();
             if !e.is_empty() {
                 p.exts.push(e);
             }
-        } else if let Some(v) = w.strip_prefix("grep:").or_else(|| w.strip_prefix("content:")) {
-            let g = v.to_ascii_lowercase().into_bytes();
+        } else if let Some(v) = lower
+            .strip_prefix("grep:")
+            .or_else(|| lower.strip_prefix("content:"))
+        {
+            let g = v.as_bytes().to_vec();
             if !g.is_empty() {
                 if neg {
                     p.neg_greps.push(g);
@@ -201,7 +206,7 @@ fn parse(q: &str) -> Parsed {
                 }
             }
         } else {
-            let t = w.to_ascii_lowercase().into_bytes();
+            let t = lower.into_bytes();
             if !t.is_empty() {
                 if neg {
                     p.neg_terms.push(t);
@@ -327,7 +332,10 @@ pub fn search(mirror: &PathBuf, refspec: &str, q: &str) -> Result<SearchResp> {
         cand.push(e);
     }
 
-    hits.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.path.len().cmp(&b.1.path.len())));
+    hits.sort_by(|a, b| {
+        b.0.cmp(&a.0)
+            .then_with(|| a.1.path.len().cmp(&b.1.path.len()))
+    });
     let files_total = hits.len();
     let files: Vec<FileHit> = hits
         .into_iter()
@@ -383,10 +391,13 @@ pub fn search(mirror: &PathBuf, refspec: &str, q: &str) -> Result<SearchResp> {
                     if neg_greps.iter().any(|g| contains_ci(data, g)) {
                         continue;
                     }
+                    if !greps.iter().all(|g| contains_ci(data, g)) {
+                        continue;
+                    }
                     let mut per = 0usize;
                     let mut file_hit = false;
                     for (li, line) in data.split(|&b| b == b'\n').enumerate() {
-                        if !greps.iter().all(|g| contains_ci(line, g)) {
+                        if !greps.iter().any(|g| contains_ci(line, g)) {
                             continue;
                         }
                         file_hit = true;
@@ -421,6 +432,7 @@ pub fn search(mirror: &PathBuf, refspec: &str, q: &str) -> Result<SearchResp> {
                 (out, local_truncated, matched)
             }));
         }
+
         for h in handles {
             let (part, t, m) = h
                 .join()
@@ -438,12 +450,45 @@ pub fn search(mirror: &PathBuf, refspec: &str, q: &str) -> Result<SearchResp> {
 
     Ok(SearchResp {
         took_ms: t0.elapsed().as_millis(),
-        files: if files_total == 0 { grep_files } else { files_total },
+        files: files_total,
+        content_files: grep_files,
         shown: files.len(),
         hits: files,
         matches,
         truncated,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn directives_are_case_insensitive() {
+        let p = parse("GREP:Decoder EXT:RS Content:Index -GREP:Legacy");
+        assert_eq!(p.greps, vec![b"decoder".to_vec(), b"index".to_vec()]);
+        assert_eq!(p.neg_greps, vec![b"legacy".to_vec()]);
+        assert_eq!(p.exts, vec![b"rs".to_vec()]);
+    }
+
+    #[test]
+    fn content_terms_can_match_different_lines() {
+        let data = b"decoder starts\nthen index continues\n";
+        assert!(contains_ci(data, b"decoder"));
+        assert!(contains_ci(data, b"index"));
+        let lines: Vec<&[u8]> = data
+            .split(|&b| b == b'\n')
+            .filter(|line| contains_ci(line, b"decoder") || contains_ci(line, b"index"))
+            .collect();
+        assert_eq!(lines.len(), 2);
+    }
+
+    #[test]
+    fn ascii_casefold_preserves_unicode_offsets() {
+        let text = "İ Decoder";
+        let folded: String = text.chars().map(|c| c.to_ascii_lowercase()).collect();
+        assert_eq!(folded.find("decoder"), Some(3));
+    }
 }
 
 pub fn blob_text(mirror: &PathBuf, refspec: &str, path: &str) -> Result<BlobResp> {

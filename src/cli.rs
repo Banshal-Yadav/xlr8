@@ -57,6 +57,5 @@ pub fn parse() -> Result<Cli> {
 }
 
 fn parse_port(v: &str) -> Result<u16> {
-    v.parse()
-        .map_err(|_| anyhow::anyhow!("invalid port: {v}"))
+    v.parse().map_err(|_| anyhow::anyhow!("invalid port: {v}"))
 }

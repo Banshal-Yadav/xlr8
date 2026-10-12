@@ -186,8 +186,9 @@
   main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 
   select, input[type="search"] {
-    background: var(--color-graphite);
-    color: var(--color-bone);
+    color-scheme: dark;
+    background-color: var(--color-graphite) !important;
+    color: var(--color-bone) !important;
     border: 1px solid var(--color-carbon);
     border-radius: var(--radius-inputs);
     padding: 7px 12px;
@@ -324,7 +325,55 @@
     background: var(--color-graphite);
     border-bottom: 1px solid var(--color-carbon);
   }
-  .file-loading { padding: 12px 16px; color: var(--color-ash); font-size: 13px; }
+    .file-loading { padding: 12px 16px; color: var(--color-ash); font-size: 13px; }
+    #search-results { display: grid; grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.6fr); gap: 12px; align-items: start; }
+    #search-results .search-list, #search-results .search-detail { min-width: 0; }
+    #search-results .search-list { max-height: min(72vh, 820px); overflow: auto; position: sticky; top: 12px; }
+    #search-results .search-detail { min-height: 180px; }
+    #search-results .search-hit { cursor: pointer; }
+    #search-results .search-hit.active { border-color: var(--color-violet); background: var(--color-graphite); }
+    #search-results .search-preview { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #search-results .search-detail .fview { max-height: 70vh; overflow: auto; }
+    #search-results .search-line-active { background: rgba(203, 176, 247, 0.18); }
+    #search-results .search-line-active .fgut { color: var(--color-violet); }
+    @media (max-width: 760px) {
+      #search-results { grid-template-columns: 1fr; }
+      #search-results .search-list { position: static; max-height: 38vh; }
+    }
+    #diff-summary .diff-layout { display: grid; grid-template-columns: minmax(240px, 0.65fr) minmax(0, 1.8fr); gap: 12px; align-items: start; }
+    #diff-summary .diff-files { max-height: 72vh; overflow: auto; position: sticky; top: 12px; }
+    #diff-summary .diff-files .card { margin-bottom: 4px; }
+    #diff-summary .diff-files .card-h { padding: 9px 10px; font-size: 12px; min-height: 44px; }
+  #search-hint { margin: 6px 0 10px; font-size: 11px; line-height: 1.5; }
+  #search-hint code { color: var(--color-violet); font-family: var(--font-mono); }
+  .toolbar button, nav button, .card-h, .search-hit { touch-action: manipulation; }
+  @media (max-width: 760px) {
+    body { padding-bottom: 52px; }
+    header { gap: 12px; padding: 12px 16px; }
+    nav { gap: 16px; overflow-x: auto; max-width: 100%; }
+    main { padding: 12px; }
+    .fig { padding: 18px 12px 12px; border-radius: 14px; }
+    .toolbar { gap: 8px; }
+    .toolbar button { min-height: 42px; padding: 8px 14px; }
+    select, input[type="search"] { min-height: 42px; max-width: 100%; }
+    #search-results .search-list { max-height: 36vh; }
+    #search-results .search-detail .fview { max-height: 56vh; }
+    #diff-summary .diff-files { max-height: 32vh; }
+    #perf { justify-content: flex-start; gap: 10px; font-size: 10px; padding-inline: 10px; }
+  }
+  @media (max-width: 420px) {
+    header { align-items: flex-start; }
+    header h1 { margin-right: 0; }
+    nav { width: 100%; order: 3; }
+    #repo-label { margin-left: auto; max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #search-info { width: 100%; }
+  }
+    #diff-summary .diff-detail { min-width: 0; }
+    #diff-summary .diff-detail .card { margin-bottom: 10px; }
+    @media (max-width: 760px) {
+      #diff-summary .diff-layout { grid-template-columns: 1fr; }
+      #diff-summary .diff-files { position: static; max-height: 30vh; }
+    }
 
   .row {
     padding: 12px 16px;
@@ -337,7 +386,9 @@
   }
   .row:hover { background: var(--color-graphite); }
   .row:last-child { border-bottom: none; }
-  #commits-list .row[data-cid] { cursor: pointer; }
+    #commits-list .row[data-cid] { cursor: pointer; flex-wrap: wrap; }
+    #commits-list .row[data-cid] > span:nth-child(2) { flex: 1; min-width: 240px; }
+    #commits-list .cs { margin-left: 56px; text-transform: none; letter-spacing: 0; }
   .row .sha {
     color: var(--color-bone);
     font-weight: 600;
@@ -402,8 +453,8 @@
 
   <section id="tab-commits">
     <div class="fig" data-title="[ COMMITS ]">
-    <div class="toolbar">
-      <select id="commits-ref"></select>
+      <div class="toolbar">
+        <select id="commits-ref"></select>
       <select id="commits-size" title="commits per page">
         <option>25</option>
         <option selected>50</option>
@@ -442,9 +493,10 @@
     <div class="fig" data-title="[ SEARCH ]">
     <div class="toolbar">
       <select id="search-ref"></select>
-      <input id="search-q" type="search" placeholder="words in paths · ext:rs · grep:text · -negate" style="flex:1;min-width:140px" />
-      <span class="muted" id="search-info"></span>
-    </div>
+        <input id="search-q" type="search" placeholder="Paths: mut · Contents: grep:mut · ext:rs · -exclude" aria-describedby="search-hint" style="flex:1;min-width:140px" />
+        <span class="muted" id="search-info"></span>
+      </div>
+      <div id="search-hint" class="muted search-hint">Plain text finds file paths; use <code>grep:mut</code> to search code contents. Add <code>ext:rs</code> to filter by extension.</div>
     <div id="search-view" style="display:none"></div>
     <div id="search-results"></div>
     </div>
@@ -634,8 +686,8 @@ async function loadCommits() {
     <div class="card"><div class="row" data-cid="${c.id}">
       <span class="sha" data-sha="${c.id}">${c.short_id}</span>
       <span>${escapeHtml(c.summary)}</span>
-      <span class="badge cs"></span>
-      <span class="muted" style="margin-left:auto">${escapeHtml(c.author)} · ${new Date(c.time*1000).toLocaleString()}</span>
+        <span class="badge cs">stats…</span>
+        <span class="muted" style="margin-left:auto">${escapeHtml(c.author)} · ${new Date(c.time*1000).toLocaleString()}</span>
     </div></div>`).join("");
   document.querySelectorAll("#commits-list .row[data-cid]").forEach(el => el.onclick = () => {
     const sha = el.querySelector(".sha");
@@ -650,8 +702,8 @@ async function loadCommits() {
     const m = new Map(ws.map(c => [c.id, c]));
     document.querySelectorAll("#commits-list .row[data-cid]").forEach(el => {
       const c = m.get(el.dataset.cid);
-      if (c) el.querySelector(".cs").innerHTML =
-        `<span class="a">+${c.additions}</span> <span class="d">−${c.deletions}</span>`;
+        if (c) el.querySelector(".cs").innerHTML =
+          `<span class="muted">${c.files_changed} files</span> · <span class="a">+${c.additions}</span> <span class="d">−${c.deletions}</span>`;
     });
   }).catch(() => {});
 
@@ -679,14 +731,17 @@ function setRef(selId, value, label) {
   sel.value = value;
 }
 
-let searchTok = 0, searchDeb = 0, searchTerms = [], searchRef = "";
+  let searchTok = 0, searchDeb = 0, searchTerms = [], searchRef = "", blobTok = 0, searchSelectTok = 0;
+
+function asciiLower(s) { return s.replace(/[A-Z]/g, c => String.fromCharCode(c.charCodeAt(0) + 32)); }
 function highlight(text, terms) {
-  const marks = [];
-  const low = text.toLowerCase();
+    const marks = [];
+  const low = asciiLower(text);
   for (const t of terms) {
+    const needle = asciiLower(t);
     if (!t) continue;
     let i = 0, j;
-    while ((j = low.indexOf(t, i)) !== -1) { marks.push([j, j + t.length]); i = j + t.length; }
+      while ((j = low.indexOf(needle, i)) !== -1) { marks.push([j, j + needle.length]); i = j + needle.length; }
   }
   if (!marks.length) return escapeHtml(text);
   marks.sort((a, b) => a[0] - b[0]);
@@ -700,25 +755,44 @@ function highlight(text, terms) {
   for (const [s, e] of merged) { out += escapeHtml(text.slice(pos, s)) + "<mark>" + escapeHtml(text.slice(s, e)) + "</mark>"; pos = e; }
   return out + escapeHtml(text.slice(pos));
 }
-async function openBlob(path) {
-  const el = $("#search-view");
-  el.style.display = "block";
+  async function openBlob(path, line = null) {
+      const tok = ++blobTok;
+    const queryTok = searchTok;
+    const repoAtRequest = repo;
+    const refAtRequest = searchRef;
+    const termsAtRequest = searchTerms.slice();
+    const el = $("#search-results .search-detail") || $("#search-view");
+    el.style.display = "block";
   el.innerHTML = '<span class="muted">loading…</span>';
   try {
-    const b = await api(`/api/${repo}/blob?ref=${encodeURIComponent(searchRef)}&path=${encodeURIComponent(path)}`);
-    const body = b.binary ? '<span class="muted">binary file</span>' : fileView(b.text, searchTerms);
-    el.innerHTML = `<div class="fig" data-title="[ FILE ]" style="margin-top:0">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">
-          <b style="font-size:13px">${escapeHtml(path)}</b>
-          <span class="muted">${b.truncated ? "truncated" : ""}</span></div>${body}</div>`;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-  } catch (e) { el.innerHTML = `<span class="muted">${escapeHtml(String(e))}</span>`; }
+      const b = await api(`/api/${repoAtRequest}/blob?ref=${encodeURIComponent(refAtRequest)}&path=${encodeURIComponent(path)}`);
+      if (tok !== blobTok || queryTok !== searchTok || repoAtRequest !== repo || refAtRequest !== searchRef) return;
+      const body = b.binary ? '<span class="muted">binary file</span>' : fileView(b.text, termsAtRequest, line);
+        el.innerHTML = `<div class="fig" data-title="[ FILE ]" style="margin-top:0">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+              <b style="font-size:13px">${escapeHtml(path)}</b>
+              <span class="muted">${b.truncated ? "truncated" : ""}</span>
+            </div>
+            <div class="blob-view">${body}</div>
+          </div>`;
+      if (line) {
+        const target = el.querySelector(`.frow[data-line="${line}"]`);
+        if (target) { target.scrollIntoView({ behavior: "smooth", block: "center" }); target.classList.add("search-line-active"); }
+      } else el.scrollIntoView({ behavior: "smooth", block: "start" });
+      return { binary: b.binary, text: b.text };
+    } catch (e) { if (tok === blobTok && queryTok === searchTok) el.innerHTML = `<span class="muted">${escapeHtml(String(e))}</span>`; }
 }
 
 const FILE_CTX = 2, FILE_MAX_HUNKS = 120, FILE_MAX_LINES = 200, FILE_LINE_MAX = 400;
-function fileView(text, terms) {
+  function fileView(text, terms, focusLine = null) {
   const lines = text.split("\n");
-  const cut = (l) => l.length > FILE_LINE_MAX ? l.slice(0, FILE_LINE_MAX) + "…" : l;
+  const cut = (l) => {
+    if (l.length <= FILE_LINE_MAX) return l;
+      const low = asciiLower(l);
+      const at = terms.map(t => low.indexOf(asciiLower(t))).filter(i => i >= 0).sort((a, b) => a - b)[0] ?? 0;
+    const start = Math.min(Math.max(0, at - Math.floor(FILE_LINE_MAX / 3)), l.length - FILE_LINE_MAX);
+    return (start ? "…" : "") + l.slice(start, start + FILE_LINE_MAX) + (start + FILE_LINE_MAX < l.length ? "…" : "");
+  };
   if (!terms.length) {
     const shown = lines.slice(0, FILE_MAX_LINES)
       .map((l, i) => `<div class="frow"><span class="fgut">${i + 1}</span><span class="ftxt">${escapeHtml(cut(l))}</span></div>`).join("");
@@ -726,12 +800,14 @@ function fileView(text, terms) {
       ? `<div class="muted" style="padding:6px 12px">… first ${FILE_MAX_LINES} of ${lines.length} lines</div>` : "";
     return `<div class="fview">${shown}</div>${more}`;
   }
-  const tl = terms.map(t => t.toLowerCase()).filter(Boolean);
-  const keep = [];
-  for (let i = 0; i < lines.length; i++) {
-    const l = lines[i].toLowerCase();
-    if (tl.some(t => l.includes(t))) keep.push(i);
-  }
+    const tl = terms.map(asciiLower).filter(Boolean);
+    const keep = [];
+    for (let i = 0; i < lines.length; i++) {
+      const l = asciiLower(lines[i]);
+      if (tl.some(t => l.includes(t))) keep.push(i);
+    }
+    if (focusLine && !keep.includes(focusLine - 1)) keep.push(focusLine - 1);
+    keep.sort((a, b) => a - b);
   if (!keep.length) {
     return fileView(text, []);
   }
@@ -742,12 +818,14 @@ function fileView(text, terms) {
     if (last && s <= last.e + 1) last.e = e;
     else hunks.push({ s, e });
   }
+  const focusedHunk = focusLine ? hunks.findIndex(h => focusLine - 1 >= h.s && focusLine - 1 <= h.e) : -1;
   const shown = hunks.slice(0, FILE_MAX_HUNKS);
+  if (focusedHunk >= FILE_MAX_HUNKS) shown[FILE_MAX_HUNKS - 1] = hunks[focusedHunk];
   const parts = [];
   for (let h = 0; h < shown.length; h++) {
     if (h) parts.push(`<div class="frow fsep"><span class="fgut">⋯</span><span class="ftxt"></span></div>`);
     for (let i = shown[h].s; i <= shown[h].e; i++)
-      parts.push(`<div class="frow"><span class="fgut">${i + 1}</span><span class="ftxt">${highlight(cut(lines[i]), terms)}</span></div>`);
+        parts.push(`<div class="frow${focusLine === i + 1 ? ' search-line-active' : ''}" data-line="${i + 1}"><span class="fgut">${i + 1}</span><span class="ftxt">${highlight(cut(lines[i]), terms)}</span></div>`);
   }
   const more = hunks.length > shown.length
     ? `<div class="muted" style="padding:6px 12px">… ${hunks.length - shown.length} more hunks</div>` : "";
@@ -755,40 +833,75 @@ function fileView(text, terms) {
 }
 async function doSearch() {
   const q = $("#search-q").value.trim();
+  const contentTerms = q.split(/\s+/).filter(t => /^(grep|content):/i.test(t)).map(t => t.slice(t.indexOf(":") + 1).toLowerCase());
+  const hasContentSearch = contentTerms.some(Boolean);
+  const pathTerms = q.split(/\s+/).filter(t => t && !t.startsWith("-") && !/^(ext|grep|content):/i.test(t)).map(t => t.toLowerCase());
+  const searchHighlights = pathTerms.concat(contentTerms);
   const tok = ++searchTok;
+  ++blobTok;
+  searchSelectTok++;
   $("#search-view").style.display = "none";
-  if (!repo || !q) { $("#search-info").textContent = ""; $("#search-results").innerHTML = ""; return; }
+  if (!repo || !q) { searchSelectTok++; $("#search-info").textContent = ""; $("#search-results").innerHTML = ""; return; }
   searchRef = $("#search-ref").value;
   try {
     const r = await api(`/api/${repo}/search?ref=${encodeURIComponent(searchRef)}&q=${encodeURIComponent(q)}`);
     if (tok !== searchTok) return;
-    searchTerms = q.split(/\s+/)
-      .filter(t => t && !t.startsWith("-") && !/^(ext|grep|content):/i.test(t))
-      .map(t => t.toLowerCase())
-      .concat(q.split(/\s+/).filter(t => /^(grep|content):/i.test(t)).map(t => t.split(":").slice(1).join(":").toLowerCase()));
-    $("#search-info").textContent =
-      `${r.files} file${r.files === 1 ? "" : "s"} · ${r.matches.length} match${r.matches.length === 1 ? "" : "es"} · ${r.took_ms} ms${r.truncated ? " · partial" : ""}`;
-    const rows = [];
-    for (const f of (r.hits || []).slice(0, 100))
-      rows.push(`<div class="card row" data-p="${escapeAttr(f.path)}" style="cursor:pointer">
-        <span style="font-family:var(--font-mono);font-size:12px">${escapeHtml(f.path)}</span>
-        <span class="badge" style="margin-left:auto">${f.score}</span></div>`);
-    const byPath = new Map();
-    for (const m of r.matches) {
-      if (!byPath.has(m.path)) byPath.set(m.path, []);
-      byPath.get(m.path).push(m);
-    }
-    for (const [path, ms] of byPath)
-      rows.push(`<div class="card" data-p="${escapeAttr(path)}" style="cursor:pointer">
-        <div class="row" style="padding:8px 14px;border-bottom:1px solid var(--border)">
-          <span style="font-family:var(--font-mono);font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(path)}</span>
-          <span class="badge">${ms.length} line${ms.length === 1 ? "" : "s"}</span></div>
-        ${ms.map(m => `<div class="row" style="padding:5px 14px;gap:10px;font-family:var(--font-mono);font-size:12px">
-          <span class="muted" style="min-width:36px;text-align:right">${m.line}</span>
-          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(m.text)}</span></div>`).join("")}
-      </div>`);
-    $("#search-results").innerHTML = rows.join("");
-    $("#search-results").querySelectorAll("[data-p]").forEach(el => el.onclick = () => openBlob(el.dataset.p));
+      searchTerms = searchHighlights;
+      const fileCount = hasContentSearch ? r.content_files : r.files;
+      $("#search-info").textContent =
+        `${fileCount} file${fileCount === 1 ? "" : "s"} · ${r.matches.length} match${r.matches.length === 1 ? "" : "es"} · ${r.took_ms} ms${r.truncated ? " · partial" : ""}`;
+      const byPath = new Map();
+      for (const m of r.matches) {
+        if (!byPath.has(m.path)) byPath.set(m.path, []);
+        byPath.get(m.path).push(m);
+      }
+      const results = hasContentSearch
+        ? [...byPath].map(([path, ms]) => ({ path, score: null, matches: ms }))
+        : (r.hits || []).slice(0, 100).map(f => ({ ...f, matches: [] }));
+      const list = results.map((f, i) => `<div class="card search-hit${i === 0 ? ' active' : ''}" data-p="${escapeAttr(f.path)}" data-line="${f.matches[0]?.line || ''}">
+        <div class="row" style="padding:9px 12px;align-items:flex-start">
+          <span style="font-family:var(--font-mono);font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(f.path)}</span>
+          <span class="badge">${hasContentSearch ? `${f.matches.length} lines` : `score ${f.score}`}</span>
+        </div>${f.matches.slice(0, 3).map(m => `<div class="row search-preview" style="padding:3px 12px 7px;gap:8px;font-family:var(--font-mono);font-size:11px" data-line="${m.line}">
+          <span class="muted" style="min-width:32px;text-align:right">${m.line}</span><span class="search-preview">${highlight(m.text, contentTerms)}</span></div>`).join("")}</div>`).join("");
+      const lineCount = r.matches.length;
+      const detail = results.length ? '<div class="search-detail"><div class="fig" data-title="[ SELECT A RESULT ]"><span class="muted">Choose a result to preview matching lines and navigate the file.</span></div></div>' : '<div class="search-detail"><div class="fig" data-title="[ NO RESULTS ]"><span class="muted">No files matched this query.</span></div></div>';
+      $("#search-results").innerHTML = `<div class="search-list">${list || '<div class="muted">No results</div>'}</div>${detail}`;
+      const cards = [...$("#search-results").querySelectorAll(".search-hit")];
+      for (const el of cards) el.onclick = (e) => {
+        const row = e.target.closest("[data-line]");
+      const line = Number(row?.dataset.line || el.dataset.line) || null;
+      const selection = ++searchSelectTok;
+      const fileMatches = results.find(f => f.path === el.dataset.p)?.matches || [];
+      const nav = fileMatches.length > 1 ? `<div class="toolbar" style="position:sticky;top:0;background:var(--color-onyx);padding:8px;z-index:1"><button class="match-prev">‹ previous</button><span class="muted match-position">match 1/${fileMatches.length}</span><button class="match-next">next ›</button></div>` : "";
+      cards.forEach(c => c.classList.toggle("active", c === el));
+      openBlob(el.dataset.p, line).then((blob) => {
+        if (selection !== searchSelectTok) return;
+        const detail = $("#search-results .search-detail");
+        if (!fileMatches.length || !detail.querySelector(".file-body, .fig")) return;
+        const header = detail.querySelector(".fig");
+        if (header && !header.querySelector(".match-position")) header.insertAdjacentHTML("afterbegin", nav);
+        let idx = Math.max(0, fileMatches.findIndex(m => m.line === line));
+        const initialPosition = detail.querySelector(".match-position");
+        if (initialPosition) initialPosition.textContent = `match ${idx + 1}/${fileMatches.length}`;
+          const setMatch = (n) => {
+            idx = (n + fileMatches.length) % fileMatches.length;
+            const matchLine = fileMatches[idx].line;
+            const view = detail.querySelector(".blob-view");
+            if (view && blob && !blob.binary) view.innerHTML = fileView(blob.text, searchTerms, matchLine);
+            const target = detail.querySelector(`.frow[data-line="${matchLine}"]`);
+            if (target) { target.scrollIntoView({ behavior: "smooth", block: "center" }); target.classList.add("search-line-active"); }
+            const pos = detail.querySelector(".match-position"); if (pos) pos.textContent = `match ${idx + 1}/${fileMatches.length}`;
+          };
+        const prev = detail.querySelector(".match-prev"), next = detail.querySelector(".match-next");
+        if (prev) prev.onclick = () => setMatch(idx - 1);
+        if (next) next.onclick = () => setMatch(idx + 1);
+        if (window.matchMedia("(max-width: 760px)").matches) detail.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      };
+      if (cards.length) cards[0].click();
+      if (hasContentSearch) $("#search-info").textContent = `${r.content_files} matching files · ${lineCount}${r.truncated ? '+' : ''} matching lines shown${r.truncated ? ' · partial' : ''} · ${r.took_ms} ms`;
+      else $("#search-info").textContent = `${r.files} matching paths · ${results.length} shown · ${r.took_ms} ms`;
   } catch (e) {
     if (tok === searchTok) $("#search-info").textContent = String(e);
   }
@@ -797,21 +910,47 @@ $("#search-q").addEventListener("input", () => { clearTimeout(searchDeb); search
 $("#search-ref").onchange = doSearch;
 
 // in-app diff find
-let diffFilesCache = [];
-let findMatches = [], findIdx = -1, findTerm = "";
+  let diffFilesCache = [];
+  let diffViewTok = 0;
+  let findMatches = [], findIdx = -1, findTerm = "";
 function renderDiffFiles(files) {
   diffFilesCache = files;
   const filter = $("#diff-filter").value.trim().toLowerCase();
   const shown = filter ? files.filter(f => f.path.toLowerCase().includes(filter)) : files;
-  $("#diff-summary").querySelectorAll(".card").forEach(el => el.remove());
-  const html = shown.map(f => `
-      <div class="card"><div class="card-h" data-path="${escapeAttr(f.path)}" data-opath="${escapeAttr(f.old_path || "")}">
+  const summary = $("#diff-summary .changes-overview");
+    if (summary) {
+      const status = filter ? `${shown.length} of ${files.length} files` : `${files.length} files`;
+      summary.querySelector(".file-count").textContent = status;
+    }
+  const nav = $("#diff-summary .diff-files");
+  const detail = $("#diff-summary .diff-detail");
+  if (!nav || !detail) return;
+  const selected = Number(detail.querySelector(".file-body")?.dataset.fileIndex ?? NaN);
+  if (Number.isFinite(selected) && !shown.some(f => files.indexOf(f) === selected)) {
+    ++diffViewTok;
+    vclose(detail);
+    detail.innerHTML = "";
+  }
+  nav.innerHTML = shown.map(f => `
+      <div class="card"><div class="card-h" data-file-index="${files.indexOf(f)}">
         <span class="status ${f.status}">${f.status}</span>
-        <span>${escapeHtml(f.path)}</span>
-        ${f.old_path && f.old_path !== f.path ? `<span class="muted">← ${escapeHtml(f.old_path)}</span>` : ""}
-        <span class="stat">${f.binary ? '<span class="muted">binary</span>' : `<span class="a">+${f.additions}</span> <span class="d">−${f.deletions}</span>`}</span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(f.path)}</span>
+        <span class="stat">${f.binary ? '<span class="muted">bin</span>' : `<span class="a">+${f.additions}</span> <span class="d">−${f.deletions}</span>`}</span>
       </div></div>`).join("");
-  $("#diff-summary").insertAdjacentHTML("beforeend", html);
+    nav.querySelectorAll(".card-h").forEach(h => h.onclick = () => {
+      nav.querySelectorAll(".card-h").forEach(x => x.parentElement.classList.toggle("open", x === h));
+      showDiffFile(Number(h.dataset.fileIndex), true);
+    });
+  if (!shown.length) {
+    ++diffViewTok;
+    vclose(detail);
+    detail.innerHTML = '<div class="fig"><span class="muted">No files match this filter.</span></div>';
+  } else if (!shown.some(f => files.indexOf(f) === selected)) {
+    vclose(detail);
+    detail.innerHTML = "";
+    showDiffFile(files.indexOf(shown[0]), false);
+  }
+
 }
 $("#diff-filter").addEventListener("input", () => {
   if (diffFilesCache.length) renderDiffFiles(diffFilesCache);
@@ -886,19 +1025,18 @@ addEventListener("keydown", (e) => {
     document.querySelector(`nav button[data-tab="${tabMap[e.key]}"]`).click();
     return;
   }
-  if ((e.key === "j" || e.key === "k") && $("#tab-compare").style.display !== "none") {
-    const cards = [...document.querySelectorAll("#diff-summary .card-h[data-path]")];
-    if (!cards.length) return;
-    e.preventDefault();
-    const openIdx = cards.findIndex(c => c.parentElement.classList.contains("open"));
-    const next = e.key === "j"
-      ? (openIdx < cards.length - 1 ? openIdx + 1 : 0)
-      : (openIdx > 0 ? openIdx - 1 : cards.length - 1);
-    const cur = document.querySelector("#diff-summary .card.open .file-body");
-    if (cur) { vclose(cur); cur.remove(); cur.parentElement.classList.remove("open"); }
-    toggleFile(cards[next]);
-    cards[next].scrollIntoView({ block: "nearest" });
-  }
+    if ((e.key === "j" || e.key === "k") && $("#tab-compare").style.display !== "none") {
+      const cards = [...document.querySelectorAll("#diff-summary .diff-files .card-h[data-file-index]")];
+      if (!cards.length) return;
+      e.preventDefault();
+      const openIdx = cards.findIndex(c => c.parentElement.classList.contains("open"));
+      const next = e.key === "j"
+        ? (openIdx < cards.length - 1 ? openIdx + 1 : 0)
+        : (openIdx > 0 ? openIdx - 1 : cards.length - 1);
+      cards.forEach((card, i) => card.parentElement.classList.toggle("open", i === next));
+      showDiffFile(Number(cards[next].dataset.fileIndex), true);
+      cards[next].scrollIntoView({ block: "nearest" });
+    }
 });
 let diffInfoLast = "";
 $("#diff-btn").onclick = async () => {
@@ -913,14 +1051,30 @@ $("#diff-btn").onclick = async () => {
     vclose($("#diff-summary"));
     $("#diff-filter").value = ""; $("#diff-find").value = "";
     findMatches = []; findIdx = -1;
-    const tot = s.total_additions + s.total_deletions || 1;
-    const share = Math.round(s.total_additions / tot * 12);
-    $("#diff-summary").innerHTML =
-      `<div class="fig" data-title="[ CHANGES ]">${escapeHtml(base)} → ${escapeHtml(head)}<br>
-        <span class="a">+${s.total_additions}</span> <span class="d">−${s.total_deletions}</span>
-        · ${s.files.length} files · add [${"=".repeat(share)}${"-".repeat(12 - share)}]<br>
-        <span class="muted">computed ${Math.round(performance.now() - t0)} ms · click a file to expand</span></div>`;
-    renderDiffFiles(s.files);
+      $("#diff-summary").innerHTML =
+        `<div class="fig changes-overview" data-title="[ CHANGES ]">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+            <b>${escapeHtml(base)} → ${escapeHtml(head)}</b>
+            <span class="file-count">${s.files.length} files</span>
+            <span class="a">+${s.total_additions}</span><span class="d">−${s.total_deletions}</span>
+            <span class="muted">${Math.round(performance.now() - t0)} ms</span>
+            <button id="diff-expand-all" type="button">expand all</button><button id="diff-collapse-all" type="button">collapse all</button>
+          </div></div>
+          <div class="diff-layout"><div class="diff-files"></div><div class="diff-detail"><div class="fig"><span class="muted">Select a file to view its diff.</span></div></div></div>`;
+      renderDiffFiles(s.files);
+      const viewToken = ++diffViewTok;
+      $("#diff-expand-all").onclick = async () => {
+        const nav = $("#diff-summary .diff-files");
+        for (const h of nav.querySelectorAll(".card-h")) {
+          if (viewToken !== diffViewTok) return;
+          await showDiffFile(Number(h.dataset.fileIndex), false, viewToken);
+        }
+      };
+      $("#diff-collapse-all").onclick = () => {
+        ++diffViewTok;
+        const detail = $("#diff-summary .diff-detail");
+        vclose(detail); detail.innerHTML = '<div class="fig"><span class="muted">Select a file to view its diff.</span></div>';
+      };
   } catch (e) {
     $("#diff-info").textContent = "";
     toast("diff failed: " + e.message);
@@ -928,32 +1082,30 @@ $("#diff-btn").onclick = async () => {
 };
 
 let diffBase = "", diffHead = "";
-$("#diff-summary").addEventListener("click", (e) => {
-  const h = e.target.closest(".card-h[data-path]");
-  if (h) toggleFile(h);
-});
-
-async function toggleFile(h) {
-  const card = h.parentElement;
-  const open = card.querySelector(".file-body");
-  if (open) { vclose(open); open.remove(); card.classList.remove("open"); vshift(); return; }
-  const body = document.createElement("div");
-  body.className = "file-body";
-  body.innerHTML = '<div class="file-loading">loading…</div>';
-  card.appendChild(body);
-  card.classList.add("open");
-  vshift();
-  let u = `/api/${repo}/file?base=${encodeURIComponent(diffBase)}&head=${encodeURIComponent(diffHead)}&path=${encodeURIComponent(h.dataset.path)}`;
-  if (h.dataset.opath && h.dataset.opath !== h.dataset.path) u += `&old_path=${encodeURIComponent(h.dataset.opath)}`;
-  try {
-    const fd = await api(u);
-    if (!body.isConnected) return;
-    body.innerHTML = fileBody(fd, h.dataset.path);
-    vmount(body);
-  } catch (e) {
-    if (body.isConnected) body.innerHTML = `<div class="file-loading">failed: ${escapeHtml(e.message)}</div>`;
+  async function showDiffFile(index, replace = true, viewToken = diffViewTok) {
+    const file = diffFilesCache[index];
+    if (!file) return;
+    const nav = $("#diff-summary .diff-files");
+    const detail = $("#diff-summary .diff-detail");
+    const h = nav.querySelector(`.card-h[data-file-index="${index}"]`);
+    if (replace) { vclose(detail); detail.innerHTML = ""; }
+    let card = detail.querySelector(`.file-body[data-file-index="${index}"]`);
+    if (card) { card.parentElement.scrollIntoView({ block: "nearest" }); return; }
+    card = document.createElement("div");
+    card.className = "card file-body";
+    card.dataset.fileIndex = index;
+    card.innerHTML = `<div class="card-h"><span class="status ${file.status}">${file.status}</span><span>${escapeHtml(file.path)}</span><span class="stat"><span class="a">+${file.additions}</span> <span class="d">−${file.deletions}</span></span></div><div class="file-loading">loading…</div>`;
+    detail.appendChild(card);
+    if (h) h.parentElement.classList.add("open");
+    let u = `/api/${repo}/file?base=${encodeURIComponent(diffBase)}&head=${encodeURIComponent(diffHead)}&path=${encodeURIComponent(file.path)}`;
+    if (file.old_path && file.old_path !== file.path) u += `&old_path=${encodeURIComponent(file.old_path)}`;
+    try {
+      const fd = await api(u);
+      if (!card.isConnected || viewToken !== diffViewTok) return;
+      card.querySelector(".file-loading").outerHTML = fileBody(fd, file.path);
+      vmount(card);
+    } catch (e) { if (card.isConnected) card.querySelector(".file-loading").textContent = `failed: ${e.message}`; }
   }
-}
 
 // virtualized diff rows
 const VREG = [];

@@ -17,8 +17,7 @@ const EST_HIGH: f32 = 0.70;
 fn myers_only() -> bool {
     static X: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *X.get_or_init(|| {
-        std::env::var_os("XLR8_RENAME_MYS")
-            .is_some_and(|v| !v.is_empty() && v != "0")
+        std::env::var_os("XLR8_RENAME_MYS").is_some_and(|v| !v.is_empty() && v != "0")
     })
 }
 
@@ -90,8 +89,10 @@ fn pairable(mode: gix::object::tree::EntryMode) -> bool {
 fn compatible(a: gix::object::tree::EntryMode, b: gix::object::tree::EntryMode) -> bool {
     matches!(
         (a.kind(), b.kind()),
-        (EntryKind::Blob | EntryKind::BlobExecutable, EntryKind::Blob | EntryKind::BlobExecutable)
-            | (EntryKind::Link, EntryKind::Link)
+        (
+            EntryKind::Blob | EntryKind::BlobExecutable,
+            EntryKind::Blob | EntryKind::BlobExecutable
+        ) | (EntryKind::Link, EntryKind::Link)
     )
 }
 
@@ -265,10 +266,17 @@ pub fn detect(
     let t0 = std::time::Instant::now();
 
     // early exit: no additions or no deletions means no rename possible
-    let has_add = changes.iter().any(|(_, c)| matches!(c, Change::Addition { .. }));
-    let has_del = changes.iter().any(|(_, c)| matches!(c, Change::Deletion { .. }));
+    let has_add = changes
+        .iter()
+        .any(|(_, c)| matches!(c, Change::Addition { .. }));
+    let has_del = changes
+        .iter()
+        .any(|(_, c)| matches!(c, Change::Deletion { .. }));
     if !has_add || !has_del {
-        crate::debug!("renames: skipped (no {} side)", if !has_add { "addition" } else { "deletion" });
+        crate::debug!(
+            "renames: skipped (no {} side)",
+            if !has_add { "addition" } else { "deletion" }
+        );
         return Ok(());
     }
 

@@ -40,9 +40,7 @@ impl GitHubClient {
         if !(200..300).contains(&status.as_u16()) {
             anyhow::bail!("github API {status} for {url}");
         }
-        resp.body_mut()
-            .read_json()
-            .context("github decode failed")
+        resp.body_mut().read_json().context("github decode failed")
     }
 
     pub fn pulls(&self, owner: &str, repo: &str) -> Result<Vec<PullRequest>> {

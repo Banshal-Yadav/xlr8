@@ -243,3 +243,141 @@ million_mod500k       114.8       83.3        2.3       0.12      1.38     959.8
   API /commits?count=1             n=100 med=   0.09ms min=   0.08 max=    0.18
   API /commits?limit=10&ref=tag    n=100 med=   0.09ms min=   0.09 max=    0.21
 
+
+# api bench  warm=10 threads=default  2026-10-13 00:02:32
+  API /refs (all refs)             n=10 med=   0.18ms min=   0.14 max=    0.57
+  API /commits?limit=50            n=10 med=   0.26ms min=   0.20 max=    0.39
+  API /commits?limit=500           n=10 med=   0.27ms min=   0.15 max=    0.46
+  API /commits?count=1             n=10 med=   0.12ms min=   0.10 max=    0.22
+  API /commits?limit=10&ref=tag    n=10 med=   0.23ms min=   0.18 max=    0.35
+
+# api bench  warm=10 threads=default  2026-10-13 00:03:11
+  API /refs (all refs)             n=10 med=   0.19ms min=   0.12 max=    0.29
+  API /commits?limit=50            n=10 med=   0.11ms min=   0.11 max=    0.17
+  API /commits?limit=500           n=10 med=   0.12ms min=   0.11 max=    0.18
+  API /commits?count=1             n=10 med=   0.10ms min=   0.09 max=    0.21
+  API /commits?limit=10&ref=tag    n=10 med=   0.15ms min=   0.10 max=    0.20
+
+# api bench  warm=100 threads=default  2026-10-13 00:18:11
+  API /refs (all refs)             n=100 med=   0.16ms min=   0.12 max=    0.37
+  API /commits?limit=50            n=100 med=   0.14ms min=   0.11 max=    0.29
+  API /commits?limit=500           n=100 med=   0.17ms min=   0.13 max=    0.44
+  API /commits?count=1             n=100 med=   0.15ms min=   0.10 max=    0.27
+  API /commits?limit=10&ref=tag    n=100 med=   0.14ms min=   0.10 max=    0.23
+
+# api bench  warm=100 threads=default  2026-10-13 00:29:22
+  API /refs (all refs)             n=100 med=   0.14ms min=   0.10 max=    0.36
+  API /commits?limit=50            n=100 med=   0.11ms min=   0.09 max=    0.30
+  API /commits?limit=500           n=100 med=   0.12ms min=   0.11 max=    0.33
+  API /commits?count=1             n=100 med=   0.09ms min=   0.08 max=   0.21
+  API /commits?limit=10&ref=tag    n=100 med=   0.10ms min=   0.09 max=   0.28
+
+# xlr8 absbench  warm=100 reps=3 threads=default  2026-10-13 00:29:22
+# device: AMD64 Family 25 Model 68 Stepping 1, AuthenticAMD
+GIT rg91           med=    52.8ms files=   91 +3603 -1069
+GIT rg252          med=    71.9ms files=  252 +72431 -21345
+GIT tokio867       med=   126.8ms files=  867 +127740 -24088
+GIT libuv495       med=    98.9ms files=  496 +80230 -23972
+GIT stress2000     med=    59.9ms files= 2000 +4000 -0
+GIT stressgiant    med=    64.7ms files= 2002 +44000 -0
+  COLD rg91           rep0     62.4ms files=91 +3607 -1073
+  COLD rg252          rep0     34.4ms files=252 +72442 -21356
+  COLD tokio867       rep0     57.1ms files=867 +127896 -24244
+  COLD libuv495       rep0     72.1ms files=495 +80354 -24096
+  COLD stress2000     rep0     52.6ms files=2000 +4000 -0
+  COLD stressgiant    rep0     33.9ms files=2002 +44000 -0
+  DISK rg91           rep0     60.9ms
+  DISK rg252           rep0     16.7ms
+  DISK tokio867       rep0     16.8ms
+  DISK libuv495       rep0      3.1ms
+  DISK stress2000     rep0     28.4ms
+  DISK stressgiant    rep0     13.9ms
+  COLD rg91           rep1     69.9ms files=91 +3607 -1073
+  COLD rg252          rep1     18.4ms files=252 +72442 -21356
+  COLD tokio867       rep1     31.4ms files=867 +127896 -24244
+  COLD libuv495       rep1     41.1ms files=495 +80354 -24096
+  COLD stress2000     rep1     34.0ms files=2000 +4000 -0
+  COLD stressgiant    rep1     26.5ms files=2002 +44000 -0
+  DISK rg91           rep1     57.2ms
+  DISK rg252          rep1     21.3ms
+  DISK tokio867       rep1     18.2ms
+  DISK libuv495       rep1      2.9ms
+  DISK stress2000     rep1     26.5ms
+  DISK stressgiant    rep1      1.7ms
+  COLD rg91           rep2     54.0ms files=91 +3607 -1073
+  COLD rg252          rep2     19.1ms files=252 +72442 -21356
+  COLD tokio867       rep2     30.3ms files=867 +127896 -24244
+  COLD libuv495       rep2     39.1ms files=495 +80354 -24096
+  COLD stress2000     rep2     57.7ms files=2000 +4000 -0
+  COLD stressgiant    rep2     35.0ms files=2002 +44000 -0
+  DISK rg91           rep2     45.2ms
+  DISK rg252          rep2     17.6ms
+  DISK tokio867       rep2      3.6ms
+  DISK libuv495       rep2      3.0ms
+  DISK stress2000     rep2      3.3ms
+  DISK stressgiant    rep2      1.3ms
+  WARM rg91           n=100 med=   0.13ms min=   0.11 max=   0.37
+  WARM rg252          n=100 med=   0.13ms min=   0.12 max=   0.32
+  WARM tokio867       n=100 med=   0.21ms min=   0.13 max=   0.37
+  WARM libuv495       n=100 med=   0.17ms min=   0.12 max=   0.29
+  WARM stress2000     n=100 med=   0.20ms min=   0.17 max=   0.39
+  WARM stressgiant    n=100 med=   0.17ms min=   0.16 max=   0.31
+
+=== SUMMARY (medians) ===
+range                 git       cold       disk       warm  cold/git  warm/git
+rg91                 52.8       62.4       57.2       0.13      0.85     404.7
+rg252                71.9       19.1       17.6       0.13      3.77     571.7
+tokio867            126.8       31.4       16.8       0.21      4.03     592.7
+libuv495             98.9       41.1        3.0       0.17      2.41     575.0
+stress2000           59.9       52.6       26.5       0.20      1.14     302.4
+stressgiant          64.7       33.9        1.7       0.17      1.91     382.7
+  COLD rg252          rep0     34.4ms files=252 +72442 -21356
+  COLD tokio867       rep0     57.1ms files=867 +127896 -24244
+  COLD libuv495       rep0     72.1ms files=495 +80354 -24096
+  COLD stress2000     rep0     52.6ms files=2000 +4000 -0
+  COLD stressgiant    rep0     33.9ms files=2002 +44000 -0
+  DISK rg91           rep0     60.9ms
+  DISK rg252          rep0     16.7ms
+  DISK tokio867       rep0     16.8ms
+  DISK libuv495       rep0      3.1ms
+  DISK stress2000     rep0     28.4ms
+  DISK stressgiant    rep0     13.9ms
+  COLD rg91           rep1     69.9ms files=91 +3607 -1073
+  COLD rg252          rep1     18.4ms files=252 +72442 -21356
+  COLD tokio867       rep1     31.4ms files=867 +127896 -24244
+  COLD libuv495       rep1     41.1ms files=495 +80354 -24096
+  COLD stress2000     rep1     34.0ms files=2000 +4000 -0
+  COLD stressgiant    rep1     26.5ms files=2002 +44000 -0
+  DISK rg91           rep1     57.2ms
+  DISK rg252          rep1     21.3ms
+  DISK tokio867       rep1     18.2ms
+  DISK libuv495       rep1      2.9ms
+  DISK stress2000     rep1     26.5ms
+  DISK stressgiant    rep1      1.7ms
+  COLD rg91           rep2     54.0ms files=91 +3607 -1073
+  COLD rg252          rep2     19.1ms files=252 +72442 -21356
+  COLD tokio867       rep2     30.3ms files=867 +127896 -24244
+  COLD libuv495       rep2     39.1ms files=495 +80354 -24096
+  COLD stress2000     rep2     57.7ms files=2000 +4000 -0
+  COLD stressgiant    rep2     35.0ms files=2002 +44000 -0
+  DISK rg91           rep2     45.2ms
+  DISK rg252          rep2     17.6ms
+  DISK tokio867       rep2      3.6ms
+  DISK libuv495       rep2      3.0ms
+  DISK stress2000     rep2      3.3ms
+  DISK stressgiant    rep2      1.3ms
+  WARM rg91           n=100 med=   0.13ms min=   0.11 max=   0.37
+  WARM rg252          n=100 med=   0.13ms min=   0.12 max=   0.32
+  WARM tokio867       n=100 med=   0.21ms min=   0.13 max=   0.37
+  WARM libuv495       n=100 med=   0.17ms min=   0.12 max=   0.29
+  WARM stress2000     n=100 med=   0.20ms min=   0.17 max=   0.39
+  WARM stressgiant    n=100 med=   0.17ms min=   0.16 max=   0.31
+
+=== SUMMARY (medians) ===
+range                 git       cold       disk       warm  cold/git  warm/git
+rg91                 52.8       62.4       57.2       0.13      0.85     404.7
+rg252                71.9       19.1       17.6       0.13      3.77     571.7
+tokio867            126.8       31.4       16.8       0.21      4.03     592.7
+libuv495             98.9       41.1        3.0       0.17      2.41     575.0
+stress2000           59.9       52.6       26.5       0.20      1.14     302.4
+stressgiant          64.7       33.9        1.7       0.17      1.91     382.7

@@ -194,7 +194,11 @@ fn fill_stats(
                         break;
                     }
                     let e = (s + STAT_CHUNK).min(data.len());
-                    out.extend(stat_chunk(mirror.clone(), tsr.clone(), data[s..e].to_vec())?);
+                    out.extend(stat_chunk(
+                        mirror.clone(),
+                        tsr.clone(),
+                        data[s..e].to_vec(),
+                    )?);
                 }
                 anyhow::Ok(out)
             }));
@@ -315,12 +319,14 @@ fn stat_chunk(
             } else {
                 let (additions, deletions) = match (&old_bytes, &new_bytes) {
                     (Some(old), Some(new)) => line_stats(old, new),
-                    (None, Some(new)) => {
-                        (imara_diff::sources::byte_lines_with_terminator(new).count() as u32, 0)
-                    }
-                    (Some(old), None) => {
-                        (0, imara_diff::sources::byte_lines_with_terminator(old).count() as u32)
-                    }
+                    (None, Some(new)) => (
+                        imara_diff::sources::byte_lines_with_terminator(new).count() as u32,
+                        0,
+                    ),
+                    (Some(old), None) => (
+                        0,
+                        imara_diff::sources::byte_lines_with_terminator(old).count() as u32,
+                    ),
                     (None, None) => (0, 0),
                 };
                 (additions, deletions, false)
@@ -376,7 +382,8 @@ pub fn file_diff(
     // git's one-line "Subproject commit" pseudo-diff instead of loading content
     if old_is_gitlink || new_is_gitlink {
         let sub = |id: &Option<gix::ObjectId>| {
-            id.map(|i| format!("Subproject commit {i}")).unwrap_or_default()
+            id.map(|i| format!("Subproject commit {i}"))
+                .unwrap_or_default()
         };
         let (lines, old_start, old_count, new_start, new_count) = match (&old_id, &new_id) {
             (Some(a), Some(b)) if a != b => (
@@ -596,10 +603,7 @@ pub fn diff_lines(old: &str, new: &str) -> Vec<(&'static str, String)> {
     let mut cursor = 0u32;
     for (before, after) in changes {
         while cursor < before.start {
-            out.push((
-                "ctx",
-                text(input.interner[input.before[cursor as usize]]),
-            ));
+            out.push(("ctx", text(input.interner[input.before[cursor as usize]])));
             cursor += 1;
         }
         for i in before.clone() {
@@ -611,10 +615,7 @@ pub fn diff_lines(old: &str, new: &str) -> Vec<(&'static str, String)> {
         cursor = before.end;
     }
     while cursor < input.before.len() as u32 {
-        out.push((
-            "ctx",
-            text(input.interner[input.before[cursor as usize]]),
-        ));
+        out.push(("ctx", text(input.interner[input.before[cursor as usize]])));
         cursor += 1;
     }
     out
@@ -633,6 +634,8 @@ pub struct CommitInfo {
     pub additions: u32,
     #[serde(default)]
     pub deletions: u32,
+    #[serde(default)]
+    pub files_changed: usize,
 }
 
 pub fn commits(
@@ -693,6 +696,7 @@ pub fn commits(
                 time,
                 additions: 0,
                 deletions: 0,
+                files_changed: 0,
             });
         }
         for pid in commit.parent_ids() {
@@ -757,14 +761,16 @@ pub fn commits(
             all.extend(part);
         }
         let collected = fill_stats(mirror, &tsr, all)?;
-        let mut acc: Vec<(u32, u32)> = vec![(0, 0); out.len()];
+        let mut acc: Vec<(u32, u32, usize)> = vec![(0, 0, 0); out.len()];
         for (i, stat) in collected {
             acc[i].0 += stat.additions;
             acc[i].1 += stat.deletions;
+            acc[i].2 += 1;
         }
         for (i, info) in out.iter_mut().enumerate() {
             info.additions = acc[i].0;
             info.deletions = acc[i].1;
+            info.files_changed = acc[i].2;
         }
     }
     Ok(out)
@@ -816,7 +822,9 @@ pub fn commit_count(mirror: &PathBuf, refspec: Option<&str>) -> Result<usize> {
     let root = commit_of(&repo, spec)?;
     let tip = root.id().detach();
 
-    let cache_root = crate::mirror::cache_dir().join("mirrors").join("count-cache");
+    let cache_root = crate::mirror::cache_dir()
+        .join("mirrors")
+        .join("count-cache");
     let slug = mirror
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
@@ -930,7 +938,10 @@ pub fn refs(mirror: &PathBuf) -> Result<Vec<RefInfo>> {
             }
             last.insert(short, id);
         }
-        raw = order.into_iter().filter_map(|s| last.get(&s).map(|id| (s, *id))).collect();
+        raw = order
+            .into_iter()
+            .filter_map(|s| last.get(&s).map(|id| (s, *id)))
+            .collect();
     }
     let n_threads = crate::repo::n_threads().min(raw.len()).max(1);
     let chunk = raw.len().div_ceil(n_threads).max(1);

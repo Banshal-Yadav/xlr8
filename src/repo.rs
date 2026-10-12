@@ -52,7 +52,10 @@ pub fn blob_put(path: &Path, id: gix::ObjectId, data: Arc<[u8]>) {
         s.bytes = 0;
     }
     s.bytes += data.len();
-    s.map.entry(path.to_path_buf()).or_default().insert(id, data);
+    s.map
+        .entry(path.to_path_buf())
+        .or_default()
+        .insert(id, data);
 }
 
 pub fn get(path: &Path) -> anyhow::Result<Arc<gix::ThreadSafeRepository>> {

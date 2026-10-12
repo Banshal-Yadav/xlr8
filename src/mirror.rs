@@ -42,7 +42,9 @@ impl RepoRef {
 }
 
 pub fn mirror_path(repo: &RepoRef) -> PathBuf {
-    cache_dir().join("mirrors").join(format!("{}.git", repo.slug()))
+    cache_dir()
+        .join("mirrors")
+        .join(format!("{}.git", repo.slug()))
 }
 
 /// Resolved once: env lookups + joins on every API hit add up.
