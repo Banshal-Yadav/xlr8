@@ -2,748 +2,866 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>xlr8</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
   :root {
-    /* Warp palette */
-    --color-obsidian: #000000;
-    --color-graphite: #121212;
-    --color-onyx: #1e1e1d;
-    --color-carbon: #333333;
-    --color-slate-deep: #40403f;
-    --color-bone: #faf9f6;
-    --color-paper: #ffffff;
-    --color-ash-light: #e3e2e0;
-    --color-ash-mid: #b4b4b2;
-    --color-ash: #868684;
-    --color-ink: #080808;
-    --color-violet: #cbb0f7;
-
-    --border: var(--color-onyx);
-
-    --add: rgba(203, 176, 247, 0.12);
-    --del: rgba(203, 176, 247, 0.06);
-    --addfg: var(--color-violet);
-    --delfg: var(--color-ash-mid);
-
-    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-
-    --radius-cards: 20px;
-    --radius-buttons: 33px;
-    --radius-inputs: 7px;
-    --radius-badges: 50px;
-    --radius-small: 4px;
-
-    --perf-h: 28px;
+    --bg0: #0a0a0a;
+    --bg1: #101010;
+    --bg2: #161616;
+    --bg3: #1c1c1c;
+    --bg4: #242424;
+    --bd: #262626;
+    --bd2: #333333;
+    --fg: #d4d4d4;
+    --fg1: #9a9a9a;
+    --fg2: #6a6a6a;
+    --fg3: #4a4a4a;
+    --acc: #cbb0f7;
+    --add: #3fb950;
+    --addbg: rgba(63, 185, 80, 0.13);
+    --del: #f85149;
+    --delbg: rgba(248, 81, 73, 0.10);
+    --kw: #d2a8ff;
+    --str: #a5d6ff;
+    --com: #8b949e;
+    --num: #79c0ff;
+    --typ: #ffa657;
+    --fn: #d2a8ff;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sbw: 264px;
+    --lh: 20px;
   }
-
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; margin: 0; padding: 0; border-radius: 0 !important; }
+  html, body { height: 100%; overflow: hidden; }
   body {
-    margin: 0;
-    background: var(--color-obsidian);
-    color: var(--color-bone);
-    padding-bottom: 60px;
-    font-family: var(--font-sans);
-    font-weight: 400;
-    font-size: 14px;
-    line-height: 1.25;
-    letter-spacing: -0.01em;
+    background: var(--bg0);
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.4;
     -webkit-font-smoothing: antialiased;
   }
-  ::selection { background: var(--color-violet); color: var(--color-ink); }
-  :focus-visible { outline: 1px solid var(--color-violet); outline-offset: 2px; }
-
-  /* scrollbars — Warp aesthetic */
-  * { scrollbar-width: thin; scrollbar-color: var(--color-carbon) transparent; }
+  ::selection { background: var(--acc); color: #000; }
+  :focus-visible { outline: 1px solid var(--acc); outline-offset: -1px; }
+  * { scrollbar-width: thin; scrollbar-color: #2e2e2e transparent; }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--color-carbon); border-radius: 5px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--color-slate-deep); }
+  ::-webkit-scrollbar-thumb { background: #2e2e2e; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
   ::-webkit-scrollbar-corner { background: transparent; }
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
-  }
-
-  .badge, .cs, .stat, #perf, .fgut, .ln .n, .ln .n2,
-  #commits-info, #diff-info, #search-info, .fig { font-variant-numeric: tabular-nums; }
-
-  .fig {
-    position: relative;
-    border: 1px solid var(--color-onyx);
-    border-radius: var(--radius-cards);
-    margin: 0 0 10px;
-    padding: 24px;
-    background: var(--color-obsidian);
-  }
-  .fig::before {
-    content: attr(data-title);
-    position: absolute;
-    top: -10px;
-    left: 24px;
-    padding: 4px 12px;
-    background: var(--color-carbon);
-    color: var(--color-ash-mid);
-    font-family: var(--font-sans);
-    font-weight: 400;
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    border-radius: var(--radius-badges);
-  }
-  .fig .fig {
-    margin-bottom: 10px;
-    background: var(--color-graphite);
-    border-radius: var(--radius-cards);
-  }
-  .fig .fig::before { background: var(--color-slate-deep); }
-  .fig .toolbar { margin-bottom: 10px; }
-  #repo-bar { margin-bottom: 24px; }
-
-  .recede { opacity: 0.45; }
-  .a { color: var(--addfg); font-weight: 500; }
-  .d { color: var(--delfg); font-weight: 500; }
-
-  header {
-    display: flex;
-    gap: 24px;
-    align-items: center;
-    flex-wrap: wrap;
-    padding: 16px 24px;
-    background: var(--color-obsidian);
-    border: none;
-  }
-  .logo {
-    font-family: var(--font-sans);
-    font-size: 18px;
-    line-height: 1;
-    color: var(--color-bone);
-    letter-spacing: -0.02em;
-    font-weight: 700;
-  }
-  header h1 { font-size: 18px; margin: 0 8px 0 0; color: var(--color-bone); font-weight: 700; }
-
-  nav { display: flex; gap: 24px; }
-  nav button {
-    background: transparent;
-    border: none;
-    color: var(--color-ash);
-    padding: 6px 0;
-    cursor: pointer;
-    border-radius: 7px;
-    font-family: var(--font-sans);
-    font-weight: 400;
-    font-size: 14px;
-    letter-spacing: -0.01em;
-  }
-  nav button:hover { color: var(--color-bone); }
-  nav button.active { color: var(--color-bone); }
-
-  #repo-label {
+  button, input, select {
+    font-family: var(--mono);
     font-size: 12px;
-    font-weight: 400;
-    color: var(--color-ash);
+    color: var(--fg);
+    background: var(--bg2);
+    border: 1px solid var(--bd2);
+    padding: 4px 10px;
+    cursor: pointer;
   }
+  input { cursor: text; }
+  button:hover { background: var(--bg4); border-color: #444; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button:disabled:hover { background: var(--bg2); border-color: var(--bd2); }
+  select { padding-right: 4px; }
+  input[type="text"], input[type="search"] { cursor: text; }
+  input::placeholder { color: var(--fg3); }
+  .mono { font-family: var(--mono); }
+  .dim { color: var(--fg2); }
+  .a { color: var(--add); }
+  .d { color: var(--del); }
+  .num { font-variant-numeric: tabular-nums; }
+  mark { background: rgba(203, 176, 247, 0.35); color: inherit; padding: 0 1px; }
 
-  #perf {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
+  /* ── app shell ─────────────────────────────────────────── */
+  #app {
+    display: grid;
+    grid-template-columns: 44px var(--sbw) 1fr;
+    grid-template-rows: 1fr 24px;
+    height: 100vh;
+    min-width: 900px;
+  }
+  #activity {
+    grid-row: 1;
+    background: var(--bg1);
+    border-right: 1px solid var(--bd);
     display: flex;
-    gap: 16px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #activity .act {
+    height: 44px;
+    display: flex;
     align-items: center;
     justify-content: center;
-    padding: 6px 20px;
-    background: var(--color-obsidian);
-    border-top: 1px solid var(--color-onyx);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    white-space: nowrap;
-    overflow-x: auto;
-    z-index: 30;
+    background: none;
+    border: none;
+    border-left: 2px solid transparent;
+    color: var(--fg2);
+    padding: 0;
   }
-  #perf-lat { color: var(--color-bone); font-weight: 600; min-width: 54px; text-align: right; }
+  #activity .act:hover { color: var(--fg); background: var(--bg3); }
+  #activity .act.active { color: var(--acc); border-left-color: var(--acc); background: var(--bg0); }
+  #activity .act svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: square; stroke-linejoin: miter; }
+  #activity .spacer { flex: 1; }
 
-  #hscroll {
-    position: fixed;
-    left: 0;
-    bottom: var(--perf-h);
-    height: 12px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    display: none;
-    z-index: 25;
-    background: var(--color-onyx);
-    border-top: 1px solid var(--color-carbon);
-  }
-  #hscroll > div { height: 1px; }
-
-  main { padding: 24px; max-width: 1200px; margin: 0 auto; }
-
-  select, input[type="search"] {
-    color-scheme: dark;
-    background-color: var(--color-graphite) !important;
-    color: var(--color-bone) !important;
-    border: 1px solid var(--color-carbon);
-    border-radius: var(--radius-inputs);
-    padding: 7px 12px;
-    font-family: var(--font-sans);
-    font-weight: 400;
-    font-size: 13px;
-    letter-spacing: -0.01em;
-    outline: none;
-    transition: border-color 0.15s ease;
-  }
-  select:hover, input[type="search"]:hover { border-color: var(--color-ash); }
-  select:focus, input[type="search"]:focus { border-color: var(--color-violet); }
-  select option { background: var(--color-graphite); color: var(--color-bone); }
-
-  .toolbar { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
-  .toolbar button {
-    background: transparent;
-    color: var(--color-ash-mid);
-    border: 1px solid var(--color-carbon);
-    border-radius: var(--radius-buttons);
-    padding: 9px 20px;
-    cursor: pointer;
-    font-family: var(--font-sans);
-    font-weight: 400;
-    font-size: 14px;
-    letter-spacing: -0.01em;
-    transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
-  }
-  .toolbar button:hover { border-color: var(--color-ash-mid); color: var(--color-bone); }
-  #diff-btn { background: var(--color-paper); color: var(--color-ink); border-color: var(--color-paper); font-weight: 600; }
-  #diff-btn:hover { background: var(--color-ash-light); border-color: var(--color-ash-light); color: var(--color-ink); }
-
-  .card {
-    background: var(--color-onyx);
-    border: 1px solid var(--color-onyx);
-    border-radius: var(--radius-cards);
-    margin-bottom: 10px;
-    overflow: hidden;
-  }
-  .card:hover { border-color: var(--color-carbon); }
-  .card-h {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--color-carbon);
+  #sidebar {
+    grid-row: 1;
+    background: var(--bg1);
+    border-right: 1px solid var(--bd);
     display: flex;
-    gap: 12px;
-    align-items: center;
-    cursor: pointer;
-    font-family: var(--font-mono);
-    font-size: 13px;
-    background: transparent;
-    transition: background-color 0.15s;
-  }
-  .card-h:hover { background: var(--color-graphite); }
-  .card.open .card-h { background: var(--color-graphite); }
-
-  .stat { margin-left: auto; font-size: 12px; }
-  .stat .a { color: var(--addfg); } .stat .d { color: var(--delfg); }
-  .cs { font-size: 11px; font-variant-numeric: tabular-nums; }
-  .cs:empty { display: none; }
-
-  .fview { font-family: var(--font-mono); font-size: 12px; padding: 8px 0; background: var(--color-obsidian); }
-  .frow { display: flex; gap: 12px; padding: 0 16px; line-height: 20px; }
-  .fgut { min-width: 40px; text-align: right; color: var(--color-ash); user-select: none; flex-shrink: 0; }
-  .ftxt { flex: 1; white-space: pre-wrap; word-break: break-all; }
-  .fsep { opacity: 0.5; }
-  mark { background: var(--color-violet); color: var(--color-ink); border-radius: 3px; padding: 0 2px; }
-
-  .status {
-    width: 20px;
-    text-align: center;
-    font-weight: 600;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    border-radius: var(--radius-small);
-    padding: 1px 4px;
-  }
-  .status.A { color: var(--color-violet); background: var(--add); }
-  .status.D { color: var(--color-ash-mid); background: var(--del); }
-  .status.M { color: var(--color-ash-light); background: rgba(227, 226, 224, 0.1); }
-  .status.R { color: var(--color-ash); background: rgba(134, 134, 132, 0.12); }
-
-  .mono { color: var(--color-ash); font-size: 12px; font-family: var(--font-mono); }
-
-  .vlines { position: relative; overflow-x: auto; background: var(--color-onyx); --w: 100%; }
-  .vlines > * { position: absolute; left: 0; width: max-content; min-width: var(--w); }
-  .ln { display: flex; white-space: pre; height: 22px; line-height: 22px; font-family: var(--font-mono); font-size: 12px; }
-  .ln .n, .ln .n2 {
-    width: 48px;
-    flex: none;
-    text-align: right;
-    padding-right: 8px;
-    color: var(--color-ash);
-    user-select: none;
-    background: var(--color-graphite);
-    position: sticky;
-  }
-  .ln .n { left: 0; }
-  .ln .n2 { left: 48px; border-right: 1px solid var(--color-carbon); }
-  .ln .t { padding-left: 8px; }
-  .ln.add { background: var(--add); } .ln.add .t { color: var(--color-violet); }
-  .ln.del { background: var(--del); } .ln.del .t { color: var(--color-ash-mid); }
-
-  .hunk-h {
-    background: var(--color-graphite);
-    color: var(--color-ash);
-    padding: 3px 12px;
-    font-size: 12px;
-    line-height: 19px;
-    height: 27px;
+    flex-direction: column;
+    min-width: 0;
     overflow: hidden;
-    box-sizing: border-box;
-    font-family: var(--font-mono);
-    border-top: 1px solid var(--color-carbon);
-    border-bottom: 1px solid var(--color-carbon);
-    font-weight: 500;
+    position: relative;
   }
-  .gap {
-    text-align: center;
-    color: var(--color-ash);
-    background: var(--color-obsidian);
-    padding: 4px;
-    font-size: 12px;
-    line-height: 19px;
-    height: 27px;
-    overflow: hidden;
-    box-sizing: border-box;
-    font-family: var(--font-mono);
+  #side-resizer {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 6px;
+    cursor: col-resize;
+    z-index: 5;
   }
-  .file-meta {
-    padding: 8px 16px;
-    color: var(--color-ash);
-    font-size: 12px;
-    font-family: var(--font-mono);
-    background: var(--color-graphite);
-    border-bottom: 1px solid var(--color-carbon);
-  }
-    .file-loading { padding: 12px 16px; color: var(--color-ash); font-size: 13px; }
-    #search-results { display: grid; grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.6fr); gap: 12px; align-items: start; }
-    #search-results .search-list, #search-results .search-detail { min-width: 0; }
-    #search-results .search-list { max-height: min(72vh, 820px); overflow: auto; position: sticky; top: 12px; }
-    #search-results .search-detail { min-height: 180px; }
-    #search-results .search-hit { cursor: pointer; }
-    #search-results .search-hit.active { border-color: var(--color-violet); background: var(--color-graphite); }
-    #search-results .search-preview { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #search-results .search-detail .fview { max-height: 70vh; overflow: auto; }
-    #search-results .search-line-active { background: rgba(203, 176, 247, 0.18); }
-    #search-results .search-line-active .fgut { color: var(--color-violet); }
-    @media (max-width: 760px) {
-      #search-results { grid-template-columns: 1fr; }
-      #search-results .search-list { position: static; max-height: 38vh; }
-    }
-    #diff-summary .diff-layout { display: grid; grid-template-columns: minmax(240px, 0.65fr) minmax(0, 1.8fr); gap: 12px; align-items: start; }
-    #diff-summary .diff-files { max-height: 72vh; overflow: auto; position: sticky; top: 12px; }
-    #diff-summary .diff-files .card { margin-bottom: 4px; }
-    #diff-summary .diff-files .card-h { padding: 9px 10px; font-size: 12px; min-height: 44px; }
-  #search-hint { margin: 6px 0 10px; font-size: 11px; line-height: 1.5; }
-  #search-hint code { color: var(--color-violet); font-family: var(--font-mono); }
-  .toolbar button, nav button, .card-h, .search-hit { touch-action: manipulation; }
-  @media (max-width: 760px) {
-    body { padding-bottom: 52px; }
-    header { gap: 12px; padding: 12px 16px; }
-    nav { gap: 16px; overflow-x: auto; max-width: 100%; }
-    main { padding: 12px; }
-    .fig { padding: 18px 12px 12px; border-radius: 14px; }
-    .toolbar { gap: 8px; }
-    .toolbar button { min-height: 42px; padding: 8px 14px; }
-    select, input[type="search"] { min-height: 42px; max-width: 100%; }
-    #search-results .search-list { max-height: 36vh; }
-    #search-results .search-detail .fview { max-height: 56vh; }
-    #diff-summary .diff-files { max-height: 32vh; }
-    #perf { justify-content: flex-start; gap: 10px; font-size: 10px; padding-inline: 10px; }
-  }
-  @media (max-width: 420px) {
-    header { align-items: flex-start; }
-    header h1 { margin-right: 0; }
-    nav { width: 100%; order: 3; }
-    #repo-label { margin-left: auto; max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #search-info { width: 100%; }
-  }
-    #diff-summary .diff-detail { min-width: 0; }
-    #diff-summary .diff-detail .card { margin-bottom: 10px; }
-    @media (max-width: 760px) {
-      #diff-summary .diff-layout { grid-template-columns: 1fr; }
-      #diff-summary .diff-files { position: static; max-height: 30vh; }
-    }
-
-  .row {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--color-carbon);
+  #side-resizer:hover, #side-resizer.drag { background: var(--acc); opacity: 0.4; }
+  .side-head {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--bd);
     display: flex;
-    gap: 12px;
+    gap: 6px;
     align-items: center;
-    font-size: 13px;
-    transition: background-color 0.15s;
+    flex-wrap: wrap;
+    flex-shrink: 0;
   }
-  .row:hover { background: var(--color-graphite); }
-  .row:last-child { border-bottom: none; }
-    #commits-list .row[data-cid] { cursor: pointer; flex-wrap: wrap; }
-    #commits-list .row[data-cid] > span:nth-child(2) { flex: 1; min-width: 240px; }
-    #commits-list .cs { margin-left: 56px; text-transform: none; letter-spacing: 0; }
-  .row .sha {
-    color: var(--color-bone);
-    font-weight: 600;
-    cursor: pointer;
-    font-family: var(--font-mono);
-    padding: 2px 8px;
-    background: var(--color-carbon);
-    border-radius: var(--radius-small);
-    border: 1px solid var(--color-carbon);
-  }
-  .row .sha:hover { background: var(--color-slate-deep); color: var(--color-bone); }
-
-  .badge {
-    background: transparent;
-    border: 1px solid var(--color-carbon);
-    border-radius: var(--radius-badges);
-    padding: 4px 12px;
+  .side-title {
+    width: 100%;
     font-size: 10px;
-    font-weight: 400;
-    letter-spacing: 0.1em;
+    font-weight: 600;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--color-ash-mid);
-    font-family: var(--font-sans);
+    color: var(--fg2);
   }
-  .muted { color: var(--color-ash); }
+  .side-body { flex: 1; overflow: auto; min-height: 0; }
+  .side-foot {
+    border-top: 1px solid var(--bd);
+    padding: 6px 10px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+    color: var(--fg1);
+  }
 
+  #main {
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--bg0);
+  }
+  #toolbar {
+    height: 34px;
+    border-bottom: 1px solid var(--bd);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    flex-shrink: 0;
+    background: var(--bg1);
+    overflow: hidden;
+  }
+  #toolbar .grow { flex: 1; }
+  #content { flex: 1; overflow: hidden; min-height: 0; position: relative; }
+
+  #statusbar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    background: var(--bg1);
+    border-top: 1px solid var(--bd);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--fg1);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  #statusbar .grow { flex: 1; }
+  #st-lat { color: var(--fg); font-weight: 700; flex: none; }
+  #st-spark { flex: none; max-width: 24ch; overflow: hidden; }
+  #st-stats { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ── panels / boxes ────────────────────────────────────── */
+  .panel {
+    border: 1px solid var(--bd);
+    background: var(--bg1);
+    margin: 10px;
+  }
+  .panel-h {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--bd);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fg2);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    background: var(--bg2);
+  }
+  .panel-h .grow { flex: 1; }
+  .panel-b { padding: 10px; }
+
+  /* ── file tree ─────────────────────────────────────────── */
+  #tree { padding: 4px 0; font-family: var(--mono); font-size: 12px; }
+  .tnode {
+    display: flex;
+    align-items: center;
+    height: 22px;
+    padding-right: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+    color: var(--fg1);
+  }
+  .tnode:hover { background: var(--bg3); color: var(--fg); }
+  .tnode.sel { background: var(--bg4); color: var(--fg); }
+  .tnode .chev {
+    width: 16px; flex: none;
+    text-align: center;
+    color: var(--fg2);
+    font-size: 10px;
+  }
+  .tnode .ficon { width: 16px; flex: none; text-align: center; margin-right: 4px; font-size: 10px; }
+  .tnode.dir .ficon { color: var(--acc); }
+  .tnode.file .ficon { color: var(--fg2); }
+  .tnode.gitlink .ficon { color: var(--typ); }
+  .tnode .tname { overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── code view ─────────────────────────────────────────── */
+  .code-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--bd);
+    background: var(--bg1);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--fg1);
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .code-head .path { color: var(--fg); font-weight: 600; }
+  .code-head .sha {
+    color: var(--acc);
+    cursor: pointer;
+    border: 1px solid var(--bd2);
+    padding: 1px 6px;
+    background: var(--bg2);
+  }
+  .code-head .sha:hover { background: var(--bg4); }
+  .code-head .grow { flex: 1; }
+  .vscroll { flex: 1; overflow: auto; min-height: 0; position: relative; }
+  .vinner { position: relative; }
+  .vrow { position: absolute; left: 0; right: 0; display: flex; height: var(--lh); line-height: var(--lh); font-family: var(--mono); font-size: 12px; white-space: pre; }
+  .vrow .ln {
+    width: 56px; flex: none;
+    text-align: right;
+    padding-right: 10px;
+    color: var(--fg3);
+    user-select: none;
+    background: var(--bg1);
+    border-right: 1px solid var(--bd);
+  }
+  .vrow .lc { padding-left: 12px; padding-right: 24px; }
+  .vrow:hover { background: var(--bg2); }
+  .vrow:hover .ln { background: var(--bg2); color: var(--fg1); }
+  .vrow.add { background: var(--addbg); }
+  .vrow.add .ln { background: var(--bg1); color: var(--add); }
+  .vrow.del { background: var(--delbg); }
+  .vrow.del .ln { background: var(--bg1); color: var(--del); }
+  .vrow.hunkrow, .vrow.gaprow {
+    background: var(--bg2);
+    color: var(--fg2);
+    border-top: 1px solid var(--bd);
+    border-bottom: 1px solid var(--bd);
+    font-size: 11px;
+  }
+  .vrow.hunkrow .ln, .vrow.gaprow .ln { background: var(--bg2); color: var(--fg3); border-right-color: var(--bd2); }
+  .vrow.gaprow { background: var(--bg0); }
+  .vrow.focusline { background: rgba(203,176,247,0.13); }
+  .vrow.focusline .ln { color: var(--acc); }
+  .wrap .vrow { white-space: pre-wrap; word-break: break-all; height: auto; min-height: var(--lh); }
+  .wrap .vinner { /* heights approximate when wrapped — fall back to static render */ }
+
+  /* syntax */
+  .k { color: var(--kw); }
+  .s { color: var(--str); }
+  .c { color: var(--com); font-style: italic; }
+  .n { color: var(--num); }
+  .t { color: var(--typ); }
+  .f { color: var(--fn); }
+  .p { color: var(--fg2); }
+
+  /* ── lists (commits, search hits, diff files, pulls) ───── */
+  .lrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px;
+    height: 30px;
+    border-bottom: 1px solid var(--bd);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .lrow:hover { background: var(--bg3); }
+  .lrow.sel { background: var(--bg4); }
+  .lrow .grow { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .lrow .sha {
+    font-family: var(--mono);
+    font-weight: 700;
+    color: var(--acc);
+    flex: none;
+  }
+  .lrow .stat { font-family: var(--mono); font-size: 11px; flex: none; }
+  .lrow .when { color: var(--fg2); font-size: 11px; flex: none; }
+  .lrow .who { color: var(--fg1); font-size: 11px; flex: none; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+  .badge {
+    border: 1px solid var(--bd2);
+    padding: 1px 6px;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--fg1);
+    flex: none;
+    background: var(--bg2);
+  }
+  .badge.A { color: var(--add); border-color: rgba(63,185,80,0.4); }
+  .badge.D { color: var(--del); border-color: rgba(248,81,73,0.4); }
+  .badge.M { color: var(--acc); border-color: rgba(203,176,247,0.35); }
+  .badge.R, .badge.C { color: var(--typ); border-color: rgba(255,166,87,0.35); }
+
+  /* ── search ────────────────────────────────────────────── */
+  .hit {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--bd);
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .hit:hover { background: var(--bg3); }
+  .hit.sel { background: var(--bg4); }
+  .hit .hpath { font-family: var(--mono); font-size: 11px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hit .hmeta { color: var(--fg2); font-size: 10px; margin-top: 2px; }
+  .hit .hline {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--fg1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+  .hit .hline .hno { color: var(--fg3); margin-right: 6px; }
+
+  /* ── palette (ctrl+p) ──────────────────────────────────── */
+  #palette-ov {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: none;
+    z-index: 100;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 12vh;
+  }
+  #palette-ov.open { display: flex; }
+  #palette {
+    width: 620px;
+    max-width: 92vw;
+    background: var(--bg1);
+    border: 1px solid var(--bd2);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    display: flex;
+    flex-direction: column;
+    max-height: 60vh;
+  }
+  #palette input {
+    border: none;
+    border-bottom: 1px solid var(--bd2);
+    padding: 10px 12px;
+    background: var(--bg0);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  #palette-list { overflow: auto; flex: 1; }
+  #palette-list .prow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    height: 28px;
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--fg1);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  #palette-list .prow.sel { background: var(--bg4); color: var(--fg); }
+  #palette-list .prow .pd { color: var(--fg3); }
+  #palette-list .prow .pf { overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── misc ──────────────────────────────────────────────── */
   #toast {
     position: fixed;
-    bottom: 48px;
-    right: 20px;
-    background: var(--color-paper);
-    color: var(--color-ink);
-    padding: 10px 20px;
-    border-radius: var(--radius-buttons);
-    display: none;
-    font-family: var(--font-sans);
+    bottom: 36px;
+    right: 14px;
+    background: var(--fg);
+    color: #000;
+    padding: 7px 14px;
     font-weight: 600;
-    font-size: 14px;
-    letter-spacing: -0.01em;
-    z-index: 40;
+    display: none;
+    z-index: 60;
   }
+  .empty {
+    padding: 40px;
+    text-align: center;
+    color: var(--fg2);
+    font-size: 12px;
+  }
+  .empty b { color: var(--fg1); }
+  kbd {
+    border: 1px solid var(--bd2);
+    background: var(--bg2);
+    padding: 1px 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--fg1);
+  }
+  .crumb { cursor: pointer; color: var(--fg1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 220px; }
+  .crumb:hover { color: var(--acc); }
+  .crumb.cur { color: var(--fg); cursor: default; }
+  .crumb.cur:hover { color: var(--fg); }
+  #toolbar { white-space: nowrap; }
+  .hintbar {
+    display: flex; gap: 14px; align-items: center;
+    color: var(--fg2); font-size: 11px;
+    padding: 6px 12px; border-top: 1px solid var(--bd);
+    background: var(--bg1); flex-shrink: 0;
+  }
+  .table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .table td { padding: 5px 10px; border-bottom: 1px solid var(--bd); vertical-align: top; }
+  .table td:first-child { color: var(--fg2); width: 90px; font-size: 11px; }
+  .binbox { padding: 30px; text-align: center; color: var(--fg1); font-family: var(--mono); }
 </style>
 </head>
 <body>
-<header>
-  <h1><span class="logo" aria-label="xlr8">[ xlr8 ]</span></h1>
-  <nav>
-    <button data-tab="commits" class="active">Commits</button>
-    <button data-tab="compare">Compare</button>
-    <button data-tab="search">Search</button>
-    <button data-tab="pulls">Pulls</button>
+<div id="app">
+  <nav id="activity" aria-label="views">
+    <button class="act active" data-tab="files" title="Files (1)">
+      <svg viewBox="0 0 24 24"><path d="M4 4h7l2 3h7v13H4z"/></svg>
+    </button>
+    <button class="act" data-tab="search" title="Search (2)">
+      <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
+    </button>
+    <button class="act" data-tab="commits" title="Commits (3)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M3 12h5.5M15.5 12H21"/></svg>
+    </button>
+    <button class="act" data-tab="compare" title="Compare (4)">
+      <svg viewBox="0 0 24 24"><path d="M7 4v11M7 15l-3-3M7 15l3-3M17 20V9M17 9l-3 3M17 9l3 3"/></svg>
+    </button>
+    <button class="act" data-tab="pulls" title="Pulls (5)">
+      <svg viewBox="0 0 24 24"><circle cx="7" cy="6" r="2.5"/><circle cx="7" cy="18" r="2.5"/><circle cx="17" cy="18" r="2.5"/><path d="M7 8.5v7M17 15.5V10a3 3 0 0 0-3-3h-2l2-2M12 7l2 2"/></svg>
+    </button>
+    <div class="spacer"></div>
+    <button class="act" id="btn-palette" title="Quick open (Ctrl+P)">
+      <svg viewBox="0 0 24 24"><path d="M4 17l6-5-6-5M12 19h8"/></svg>
+    </button>
   </nav>
-  <span id="repo-label" class="muted"></span>
-</header>
-<main>
-  <div class="toolbar fig" id="repo-bar" data-title="[ REPO ]" style="display:none">
-    <span class="muted">repo:</span>
-    <select id="repo-select"></select>
-    <button id="sync-btn">sync</button>
-    <span class="muted" id="sync-age"></span>
-  </div>
 
-  <section id="tab-commits">
-    <div class="fig" data-title="[ COMMITS ]">
-      <div class="toolbar">
-        <select id="commits-ref"></select>
-      <select id="commits-size" title="commits per page">
-        <option>25</option>
-        <option selected>50</option>
-        <option>100</option>
-        <option>200</option>
-      </select>
-      <button id="commits-prev" title="previous page">‹</button>
-      <span class="muted" id="commits-info"></span>
-      <button id="commits-next" title="next page">›</button>
+  <aside id="sidebar">
+    <div id="side-resizer"></div>
+    <div class="side-head">
+      <span class="side-title" id="side-title">Explorer</span>
+      <select id="repo-select" style="flex:1;min-width:0" title="repository"></select>
+      <button id="sync-btn" title="fetch from origin">SYNC</button>
     </div>
-    <div id="commits-fig" style="margin-top:24px"></div>
-    <div id="commits-list"></div>
-    </div>
+    <div id="side-sub" class="side-head" style="display:none"></div>
+    <div id="side-body" class="side-body"></div>
+    <div class="side-foot" id="side-foot"><span class="dim">booting…</span><span class="grow" style="flex:1"></span><span class="dim num" id="sf-ms">—</span></div>
+  </aside>
+
+  <section id="main">
+    <div id="toolbar"></div>
+    <div id="content"></div>
+    <div class="hintbar" id="hintbar"></div>
   </section>
 
-  <section id="tab-compare" style="display:none">
-    <div class="fig" data-title="[ COMPARE ]">
-    <div class="toolbar">
-      <select id="base-ref"></select><span class="muted">...</span><select id="head-ref"></select>
-      <button id="diff-btn">diff</button>
-      <input id="diff-find" type="search" placeholder="find in diff" style="width:140px" />
-      <input id="diff-filter" type="search" placeholder="filter files" style="width:130px" />
-      <span class="muted" id="diff-info"></span>
-    </div>
-    <div id="diff-summary"></div>
-    </div>
-  </section>
-
-  <section id="tab-pulls" style="display:none">
-    <div class="fig" data-title="[ PULLS ]">
-    <div id="pulls-list"><span class="muted">loading…</span></div>
-    </div>
-  </section>
-
-  <section id="tab-search" style="display:none">
-    <div class="fig" data-title="[ SEARCH ]">
-    <div class="toolbar">
-      <select id="search-ref"></select>
-        <input id="search-q" type="search" placeholder="Paths: mut · Contents: grep:mut · ext:rs · -exclude" aria-describedby="search-hint" style="flex:1;min-width:140px" />
-        <span class="muted" id="search-info"></span>
-      </div>
-      <div id="search-hint" class="muted search-hint">Plain text finds file paths; use <code>grep:mut</code> to search code contents. Add <code>ext:rs</code> to filter by extension.</div>
-    <div id="search-view" style="display:none"></div>
-    <div id="search-results"></div>
-    </div>
-  </section>
-</main>
-<div id="toast"></div>
-<div id="perf" title="spark = last 40 request round trips (client-measured) · ram/cpu/up/cache/synced from /api/stats every 2 s (paused when tab hidden)">
-  <span id="perf-spark" class="muted"></span>
-  <span id="perf-lat">—</span>
-  <span id="perf-stats" class="muted"></span>
+  <footer id="statusbar">
+    <span id="st-repo" class="dim"></span>
+    <span id="st-ref" class="dim"></span>
+    <span class="grow"></span>
+    <span id="st-spark" class="dim"></span>
+    <span id="st-lat">—</span>
+    <span id="st-stats" class="dim"></span>
+  </footer>
 </div>
-<div id="hscroll"><div></div></div>
+
+<div id="palette-ov">
+  <div id="palette">
+    <input id="palette-input" type="text" placeholder="Go to file — type path fragment" spellcheck="false" autocomplete="off">
+    <div id="palette-list"></div>
+  </div>
+</div>
+<div id="toast"></div>
 
 <script>
-let repo = null; // "owner/name"
-
+"use strict";
+/* ═══════════════ core helpers ═══════════════ */
 const $ = (s) => document.querySelector(s);
-const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.style.display = "block"; setTimeout(() => t.style.display = "none", 3000); };
+const $$ = (s) => [...document.querySelectorAll(s)];
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", 2600); };
+const fmtBytes = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : b >= 1024 ? (b / 1024).toFixed(1) + " KB" : b + " B";
+const fmtDur = (s) => s < 60 ? s + "s" : s < 3600 ? Math.floor(s / 60) + "m" : s < 86400 ? Math.floor(s / 3600) + "h" : Math.floor(s / 86400) + "d";
+const fmtRel = (ts) => { const d = Math.max(0, Math.floor(Date.now() / 1000) - ts); return fmtDur(d) + " ago"; };
+const asciiLower = (s) => s.replace(/[A-Z]/g, c => String.fromCharCode(c.charCodeAt(0) + 32));
 
-const fmtBytes = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.round(b / 1024) + " KB";
-const fmtDur = (s) => s < 120 ? s + "s" : s < 7200 ? Math.floor(s / 60) + "m" : Math.floor(s / 3600) + "h";
-
-// live stats polling
-let lastS = null, fetchedAt = 0;
-const meter = (frac, n = 12) => {
-  const f = Math.round(Math.min(1, Math.max(0, frac)) * n);
-  return "=".repeat(f) + "-".repeat(n - f);
-};
-function renderStats() {
-  if (!lastS) return;
-  const drift = Math.floor((Date.now() - fetchedAt) / 1000);
-  const up = lastS.uptime_s + drift;
-  const synced = lastS.synced_s ? lastS.synced_s + drift : 0;
-  $("#perf-stats").textContent =
-    "ram " + fmtBytes(lastS.rss) + " · cpu " + (lastS.cpu_ms / 1000).toFixed(1) + "s" +
-    " · up " + fmtDur(up) + " · cache [" + meter(lastS.cache_bytes / (32 << 20)) + "] " +
-    fmtBytes(lastS.cache_bytes) + "/32m";
-  $("#sync-age").textContent = synced ? "synced " + fmtDur(synced) + " ago" : "";
-}
-function refreshStats() {
-  if (document.hidden) return;
-  fetch("/api/stats").then(r => r.ok ? r.json() : null).then(s => {
-    if (!s) return;
-    lastS = s;
-    fetchedAt = Date.now();
-    renderStats();
-  }).catch(() => {});
-}
-// latency sparkline
-const LAT = [], SPARK_CH = "▁▂▃▄▅▆▇█";
-const mark = (ms) => {
+let LAT = [];
+const SPARK_CH = "▁▂▃▄▅▆▇█";
+function mark(ms) {
   LAT.push(ms);
   if (LAT.length > 40) LAT.shift();
-  const mx = Math.max(...LAT, 1);
-  $("#perf-spark").textContent = LAT.map(v => SPARK_CH[Math.min(7, Math.floor(v / mx * 7.999))]).join("");
-  $("#perf-lat").textContent = (ms >= 100 ? Math.round(ms) : ms.toFixed(1)) + "ms";
-  refreshStats();
-};
-setInterval(refreshStats, 2000);
-setInterval(renderStats, 1000);
-const api = async (path) => {
+  $("#st-spark").textContent = LAT.map(v => SPARK_CH[Math.min(7, Math.floor(v / Math.max(...LAT, 1) * 7.999))]).join("");
+  const txt = (ms >= 100 ? Math.round(ms) : ms.toFixed(1)) + "ms";
+  $("#st-lat").textContent = txt;
+  const sf = $("#sf-ms");
+  if (sf) sf.textContent = txt;
+}
+async function api(path) {
   const t0 = performance.now();
   const r = await fetch(path);
-  if (!r.ok) throw new Error(await r.text());
+  if (!r.ok) throw new Error((await r.text().catch(() => "")) || r.status);
   const j = await r.json();
   mark(performance.now() - t0);
   return j;
+}
+
+let lastS = null, fetchedAt = 0;
+let lastFoot = "";
+function renderStats() {
+  if (!lastS) return;
+  const drift = Math.floor((Date.now() - fetchedAt) / 1000);
+  $("#st-stats").textContent =
+    "ram " + fmtBytes(lastS.rss) +
+    " · cpu " + (lastS.cpu_ms / 1000).toFixed(1) + "s" +
+    " · up " + fmtDur(lastS.uptime_s + drift) +
+    " · cache " + fmtBytes(lastS.cache_bytes) + "/32m" +
+    " · reqs " + lastS.reqs;
+  const synced = lastS.synced_s ? lastS.synced_s + drift : 0;
+  const foot = synced ? "synced " + fmtDur(synced) + " ago" : "never synced";
+  if (foot === lastFoot) return; // skip DOM rebuild when text unchanged
+  lastFoot = foot;
+  const cur = $("#sf-ms")?.textContent || "—";
+  $("#side-foot").innerHTML = `<span class="dim">${foot}</span><span class="grow" style="flex:1"></span><span class="dim num" id="sf-ms">${cur}</span>`;
+}
+function refreshStats() {
+  if (document.hidden) return;
+  fetch("/api/stats").then(r => r.ok ? r.json() : null).then(s => { if (s) { lastS = s; fetchedAt = Date.now(); renderStats(); } }).catch(() => {});
+}
+setInterval(refreshStats, 2000);
+setInterval(renderStats, 1000);
+
+/* ═══════════════ state ═══════════════ */
+const S = {
+  repo: null,
+  refs: [],
+  tab: "files",
+  ref: "HEAD",        // browsing ref for tree/blob
+  path: null,         // open file
+  dir: "",            // viewed dir in main (files tab, no file)
+  base: null, head: null,
+  wrap: false,
 };
+const treeCache = new Map();   // dir -> entries
+const blobCache = new Map();   // ref\0path -> BlobResp
+const metaCache = new Map();   // ref\0path -> FileMeta
+let filesCache = null;         // flat path list for current repo+ref
+let filesCacheKey = null;
+const expanded = new Set();    // expanded dir paths
 
-// tabs
-document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
-  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
-  document.querySelectorAll("main > section").forEach(s =>
-    s.style.display = s.id === "tab-" + b.dataset.tab ? "" : "none");
-  if (b.dataset.tab === "pulls") loadPulls();
-  if (b.dataset.tab === "search") $("#search-q").focus();
-});
-
-async function refreshRepos() {
-  const { repos } = await api("/api/repos");
-  const sel = $("#repo-select");
-  sel.innerHTML = "";
-  repos.forEach(r => { const o = document.createElement("option"); o.value = r; o.textContent = r; sel.appendChild(o); });
-  $("#repo-bar").style.display = repos.length ? "flex" : "none";
-  if (repos.length && !repo) { repo = repos[0]; sel.value = repo; onRepoChange(); }
-  else if (repo) { sel.value = repo; }
+/* ═══════════════ virtual scroll ═══════════════ */
+class VScroll {
+  constructor(container, rowH) {
+    this.c = container;
+    this.rowH = rowH;
+    this.n = 0;
+    this.tops = null;      // optional Int32Array tops (variable heights)
+    this.renderRow = null;
+    this.cache = new Map();
+    this.overscan = 30;
+    this._onScroll = () => this.paint();
+    container.addEventListener("scroll", this._onScroll, { passive: true });
+  }
+  destroy() {
+    this.c.removeEventListener("scroll", this._onScroll);
+    this.c.innerHTML = "";
+  }
+  setRows(n, renderRow, tops) {
+    this.n = n;
+    this.renderRow = renderRow;
+    this.tops = tops || null;
+    this.cache.clear();
+    const total = tops ? tops[n] : n * this.rowH;
+    this.c.innerHTML = '<div class="vinner" style="height:' + total + 'px;min-height:' + total + 'px"></div>';
+    this.inner = this.c.firstElementChild;
+    // force layout so clientHeight > 0 before first paint (otherwise only overscan renders)
+    void this.c.offsetHeight;
+    this.paint();
+  }
+  topOf(i) { return this.tops ? this.tops[i] : i * this.rowH; }
+  paint() {
+    if (!this.renderRow || !this.inner || !this.c.isConnected) return;
+    const st = this.c.scrollTop, h = this.c.clientHeight || 600; // fallback if not laid out yet
+    const find = (x) => {
+      if (!this.tops) return Math.floor(x / this.rowH);
+      let lo = 0, hi = this.n - 1;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (this.topOf(m + 1) <= x) lo = m + 1; else hi = m; }
+      return lo;
+    };
+    const i = Math.max(0, find(st) - this.overscan);
+    const j = Math.min(this.n, find(st + h) + this.overscan + 1);
+    let html = "";
+    for (let k = i; k < j; k++) html += this.row(k);
+    this.inner.innerHTML = html;
+  }
+  row(k) {
+    const top = this.topOf(k);
+    const cached = this.cache.get(k);
+    const body = cached !== undefined ? cached : (this.cache.set(k, this.renderRow(k)), this.cache.get(k));
+    return body.replace("%TOP%", top);
+  }
+  scrollToRow(i, center) {
+    const top = this.topOf(i);
+    this.c.scrollTop = center ? Math.max(0, top - this.c.clientHeight / 2 + 10) : top;
+    this.paint();
+  }
 }
 
-function onRepoChange() {
-  $("#repo-label").textContent = repo || "";
-  vclose($("#diff-summary")); $("#diff-summary").innerHTML = "";
-  $("#diff-info").textContent = "";
-  $("#pulls-list").innerHTML = '<span class="muted">loading…</span>';
-  commitsPage = 1;
-  commitTotal = null;
-  $("#search-results").innerHTML = "";
-  $("#search-view").style.display = "none";
-  $("#search-info").textContent = "";
-  loadRefs().then(() => {
-    loadCommits();
-    if ($("#search-q").value.trim()) doSearch();
-    const pullsTab = document.querySelector('nav button[data-tab="pulls"]');
-    if (pullsTab && pullsTab.classList.contains("active")) loadPulls();
-  });
-}
-
-$("#repo-select").onchange = (e) => { repo = e.target.value; onRepoChange(); };
-$("#sync-btn").onclick = async () => {
-  if (!repo) return;
-  toast("syncing…");
-  fetch("/api/sync", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ repo }) })
-    .then(r => r.ok ? (toast("synced"), onRepoChange()) : r.text().then(t => toast("error: " + t)))
-    .catch(e => toast("error: " + e));
+/* ═══════════════ syntax highlight ═══════════════ */
+const LANGS = {
+  rs: { kw: "as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type unsafe use where while", line: "//", block: true },
+  js: { kw: "abstract arguments async await break case catch class const continue debugger default delete do else enum export extends false finally for from function get if implements import in instanceof interface let new null of private protected public return set static super switch this throw true try typeof undefined var void while with yield", line: "//", block: true },
+  ts: { kw: "abstract any as asserts async await boolean break case catch class const continue declare default delete do else enum export extends false finally for from function get if implements import in instanceof is keyof let module namespace never new null number object of private protected public readonly return set static string super switch this throw true try type typeof undefined unique unknown var void while with yield", line: "//", block: true },
+  py: { kw: "and as assert async await break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return True try while with yield match case self", line: "#", block: false },
+  go: { kw: "break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var nil true false", line: "//", block: true },
+  c: { kw: "auto break case char const continue default do double else enum extern float for goto if inline int long register restrict return short signed sizeof static struct switch typedef union unsigned void volatile while bool true false NULL", line: "//", block: true },
+  java: { kw: "abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for if implements import instanceof int interface long native new null package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while true false var record", line: "//", block: true },
+  sh: { kw: "if then else elif fi for while until do done case esac function in select time coproc return exit export local readonly declare set unset shift source alias", line: "#", block: false },
+  yaml: { kw: "true false null yes no on off", line: "#", block: false },
+  toml: { kw: "true false", line: "#", block: false },
+  json: { kw: "true false null", line: null, block: false },
+  md: { kw: "", line: null, block: false },
+  html: { kw: "", line: null, block: true },
+  css: { kw: "", line: null, block: true },
+  sql: { kw: "select from where insert into values update set delete create table index view drop alter add primary key foreign references not null unique check default join left right inner outer full on as and or in like between order by group having limit offset union all distinct count sum avg min max", line: "--", block: true },
+  rb: { kw: "alias and begin break case class def defined do else elsif end ensure false for if in module next nil not or redo rescue retry return self super then true undef unless until when while yield", line: "#", block: true },
+  php: { kw: "abstract and array as break callable case catch class clone const continue declare default die do echo else elseif empty enddeclare endfor endforeach endif endswitch endwhile enum extends final finally fn for foreach function global goto if implements include instanceof interface isset list match namespace new or print private protected public readonly require return static switch throw trait try unset use var while yield true false null", line: "//", block: true },
+  swift: { kw: "associatedtype class deinit enum extension fileprivate func import init inout internal let open operator private protocol public rethrows static struct subscript typealias var break case continue default defer else fallthrough for guard if in repeat return switch where while as Any catch false is nil super self Self throw throws true try", line: "//", block: true },
+  kt: { kw: "as break class continue do else false for fun if in interface is null object package return super this throw true try typealias typeof val var when while action annotation companion constructor crossinline data delegate dynamic enum expect external final finally import init inline inner internal lateinit noinline open operator out override private protected public reified sealed suspend tailrec vararg it", line: "//", block: true },
+  diff: { kw: "", line: null, block: false },
 };
-
-async function loadRefs() {
-  const { refs } = await api(`/api/${repo}/refs`);
-  const pref = ["main", "master"];
-  const rank = (n) => { const i = pref.indexOf(n); return i < 0 ? pref.length : i; };
-  refs.sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
-  for (const id of ["commits-ref","base-ref","head-ref","search-ref"]) {
-    const sel = $("#" + id); sel.innerHTML = "";
-    refs.forEach(r => { const o = document.createElement("option"); o.value = r.name; o.textContent = r.name; sel.appendChild(o); });
+const EXT_LANG = {
+  rs: "rs", js: "js", mjs: "js", cjs: "js", jsx: "js", ts: "ts", tsx: "ts",
+  py: "py", pyw: "py", go: "go",
+  c: "c", h: "c", cpp: "c", cc: "c", cxx: "c", hpp: "c", hh: "c", hxx: "c",
+  java: "java", kt: "kt", kts: "kt", swift: "swift",
+  sh: "sh", bash: "sh", zsh: "sh", fish: "sh",
+  yml: "yaml", yaml: "yaml", toml: "toml", ini: "toml", cfg: "toml", conf: "toml",
+  json: "json", jsonc: "json",
+  md: "md", markdown: "md",
+  html: "html", htm: "html", xml: "html", svg: "html", vue: "html",
+  css: "css", scss: "css", less: "css",
+  sql: "sql", rb: "rb", php: "php", pl: "sh", lua: "sh", r: "sh",
+  lock: "toml", gitignore: "sh", env: "sh", dockerfile: "sh", makefile: "sh",
+};
+function langOf(path) {
+  const base = path.split("/").pop().toLowerCase();
+  if (base === "dockerfile" || base === "makefile" || base.startsWith("makefile.")) return "sh";
+  if (base === ".gitignore" || base === ".gitattributes" || base === ".dockerignore") return "sh";
+  if (base === "cargo.toml" || base === "rustfmt.toml") return "toml";
+  const m = /\.([a-z0-9]+)$/.exec(base);
+  return m ? EXT_LANG[m[1]] || null : null;
+}
+const KW_CACHE = new Map();
+function kwSet(lang) {
+  let s = KW_CACHE.get(lang);
+  if (!s) { s = new Set((LANGS[lang]?.kw || "").split(" ").filter(Boolean)); KW_CACHE.set(lang, s); }
+  return s;
+}
+// per-line highlighter; state: 0 normal, 1 in block comment, 2 in multiline string
+function hlLine(line, lang, stIn) {
+  const cfg = lang ? LANGS[lang] : null;
+  if (!cfg || (!cfg.line && !cfg.block && !kwSet(lang).size)) return { html: esc(line), st: stIn };
+  const kws = kwSet(lang);
+  let out = "", i = 0, st = stIn;
+  const L = line.length;
+  while (i < L) {
+    if (st === 1) { // block comment
+      const end = cfg.block ? line.indexOf("*/", i) : -1;
+      if (end === -1) { out += '<span class="c">' + esc(line.slice(i)) + "</span>"; return { html: out, st: 1 }; }
+      out += '<span class="c">' + esc(line.slice(i, end + 2)) + "</span>";
+      i = end + 2; st = 0; continue;
+    }
+    if (st === 2) { // triple / multiline string (python)
+      const end = line.indexOf('"""', i);
+      if (end === -1) { out += '<span class="s">' + esc(line.slice(i)) + "</span>"; return { html: out, st: 2 }; }
+      out += '<span class="s">' + esc(line.slice(i, end + 3)) + "</span>";
+      i = end + 3; st = 0; continue;
+    }
+    const ch = line[i];
+    // line comment
+    if (cfg.line && line.startsWith(cfg.line, i)) { out += '<span class="c">' + esc(line.slice(i)) + "</span>"; return { html: out, st: 0 }; }
+    // html comment
+    if (lang === "html" && line.startsWith("<!--", i)) {
+      const end = line.indexOf("-->", i);
+      if (end === -1) { out += '<span class="c">' + esc(line.slice(i)) + "</span>"; return { html: out, st: 1 }; }
+      out += '<span class="c">' + esc(line.slice(i, end + 3)) + "</span>"; i = end + 3; continue;
+    }
+    // css/ diff block comment opener
+    if (cfg.block && line.startsWith("/*", i)) {
+      const end = line.indexOf("*/", i + 2);
+      if (end === -1) { out += '<span class="c">' + esc(line.slice(i)) + "</span>"; return { html: out, st: 1 }; }
+      out += '<span class="c">' + esc(line.slice(i, end + 2)) + "</span>"; i = end + 2; continue;
+    }
+    // python triple string
+    if (lang === 'py' && line.startsWith('"""', i)) {
+      const end = line.indexOf('"""', i + 3);
+      if (end === -1) { out += '<span class="s">' + esc(line.slice(i)) + "</span>"; return { html: out, st: 2 }; }
+      out += '<span class="s">' + esc(line.slice(i, end + 3)) + "</span>"; i = end + 3; continue;
+    }
+    // strings
+    if (ch === '"' || ch === "'" || ch === "`") {
+      if (lang === "rs" && (line[i + 1] === '"' || line[i + 1] === "'")) { // raw strings r#"..."#
+        let j = i + 1;
+        let hash = 0;
+        while (line[j] === "#") { hash++; j++; }
+        if (line[j] === ch) {
+          const close = ch + "#".repeat(hash);
+          const end = line.indexOf(close, j + 1);
+          if (end === -1) { out += '<span class="s">' + esc(line.slice(i)) + "</span>"; return { html: out, st: 0 }; }
+          out += '<span class="s">' + esc(line.slice(i, end + close.length)) + "</span>";
+          i = end + close.length; continue;
+        }
+      }
+      let j = i + 1;
+      while (j < L) {
+        if (line[j] === "\\") { j += 2; continue; }
+        if (line[j] === ch) break;
+        j++;
+      }
+      out += '<span class="s">' + esc(line.slice(i, Math.min(j + 1, L))) + "</span>";
+      i = j + 1; continue;
+    }
+    // numbers
+    if (ch >= "0" && ch <= "9" || (ch === "." && i + 1 < L && line[i + 1] >= "0" && line[i + 1] <= "9")) {
+      let j = i;
+      while (j < L && /[0-9a-fA-FxXoObB._]/.test(line[j])) j++;
+      out += '<span class="n">' + esc(line.slice(i, j)) + "</span>";
+      i = j; continue;
+    }
+    // identifiers / keywords
+    if (/[A-Za-z_$@#]/.test(ch)) {
+      let j = i;
+      while (j < L && /[A-Za-z0-9_$]/.test(line[j])) j++;
+      const w = line.slice(i, j);
+      if (kws.has(w)) out += '<span class="k">' + esc(w) + "</span>";
+      else if (/^[A-Z]/.test(w)) out += '<span class="t">' + esc(w) + "</span>";
+      else if (line[j] === "(") out += '<span class="f">' + esc(w) + "</span>";
+      else out += esc(w);
+      i = j; continue;
+    }
+    // punctuation dim
+    if (/[{}()\[\];,.:=+\-*/%<>!&|^~?]/.test(ch)) {
+      out += '<span class="p">' + esc(ch) + "</span>";
+      i++; continue;
+    }
+    out += esc(ch);
+    i++;
   }
-  const names = refs.map(r => r.name);
-  if (names.includes("main")) $("#base-ref").value = "main";
-  else if (names.includes("master")) $("#base-ref").value = "master";
-  $("#head-ref").value = $("#base-ref").value;
+  return { html: out, st: 0 };
+}
+// precompute block-comment/string states for a whole file — state-only
+// scanner (no HTML building) so 100k-line files don't freeze the thread
+function hlStates(lines, lang) {
+  const cfg = lang ? LANGS[lang] : null;
+  const st = new Uint8Array(lines.length);
+  if (!cfg || (!cfg.block && lang !== "py" && lang !== "html")) return st;
+  const block = cfg.block || "";
+  let cur = 0;
+  for (let i = 0; i < lines.length; i++) {
+    st[i] = cur;
+    const line = lines[i];
+    let pos = 0;
+    const L = line.length;
+    while (pos < L) {
+      if (cur === 1) {
+        const end = block ? line.indexOf("*/", pos) : -1;
+        if (end === -1) break;
+        pos = end + 2; cur = 0; continue;
+      }
+      if (cur === 2) {
+        const end = line.indexOf('"""', pos);
+        if (end === -1) break;
+        pos = end + 3; cur = 0; continue;
+      }
+      if (lang === "html" && line.startsWith("<!--", pos)) {
+        const end = line.indexOf("-->", pos);
+        if (end === -1) { cur = 1; break; }
+        pos = end + 3; continue;
+      }
+      if (block && line.startsWith("/*", pos)) {
+        const end = line.indexOf("*/", pos + 2);
+        if (end === -1) { cur = 1; break; }
+        pos = end + 2; continue;
+      }
+      if (lang === "py" && line.startsWith('"""', pos)) {
+        const end = line.indexOf('"""', pos + 3);
+        if (end === -1) { cur = 2; break; }
+        pos = end + 3; continue;
+      }
+      const ch = line[pos];
+      if (cfg.line && line.startsWith(cfg.line, pos)) break; // line comment ends the state scan
+      if (ch === '"' || ch === "'" || ch === "`") {
+        // skip string — prevents block markers inside strings from flipping state
+        let j = pos + 1;
+        while (j < L) {
+          if (line[j] === "\\") { j += 2; continue; }
+          if (line[j] === ch) break;
+          j++;
+        }
+        pos = j + 1; continue;
+      }
+      pos++;
+    }
+  }
+  return st;
 }
 
-let commitsTok = 0;
-let commitsPage = 1;
-let commitTotal = null;
-let commitsLoaded = 0;
-function renderCommitsInfo() {
-  const limit = +$("#commits-size").value;
-  const pages = commitTotal == null ? 0 : Math.max(1, Math.ceil(commitTotal / limit));
-  $("#commits-info").textContent = pages
-    ? `page ${commitsPage}/${pages} · ${commitTotal.toLocaleString()} commits`
-    : `page ${commitsPage} · ${commitsLoaded} commits`;
-  $("#commits-prev").disabled = commitsPage <= 1;
-  $("#commits-next").disabled = pages ? commitsPage >= pages : commitsLoaded < limit;
-}
-
-function renderCommitsFig(commits) {
-  const el = $("#commits-fig");
-  if (!commits.length) { el.innerHTML = ""; return; }
-  const byDay = new Map();
-  for (const c of commits) {
-    const k = Math.floor(c.time / 86400);
-    byDay.set(k, (byDay.get(k) || 0) + 1);
-  }
-  const ks = [...byDay.keys()].sort((a, b) => a - b);
-  const hi = ks[ks.length - 1];
-  const span = Math.min(hi - ks[0] + 1, 60);
-  const mx = Math.max(...byDay.values());
-  let strip = "";
-  for (let k = hi - span + 1; k <= hi; k++) {
-    const v = byDay.get(k) || 0;
-    strip += v ? SPARK_CH[Math.min(7, Math.floor(v / mx * 7.999))] : " ";
-  }
-  const iso = (k) => new Date(k * 86400 * 1000).toISOString().slice(0, 10);
-  const authors = new Map();
-  for (const c of commits) authors.set(c.author, (authors.get(c.author) || 0) + 1);
-  const top = [...authors].sort((a, b) => b[1] - a[1]).slice(0, 3);
-  const amx = top.length ? top[0][1] : 1;
-  el.innerHTML = `<div class="fig" data-title="[ ACTIVITY ]">${strip}
-    <div class="muted" style="margin-top:5px">${iso(hi - span + 1)} → ${iso(hi)} · ${commits.length} commits</div>
-    ${top.map(([n, v], i) => `<div style="display:flex;gap:10px;margin-top:${i ? 2 : 8}px"${i ? ' class="recede"' : ""}>
-      <span style="min-width:110px;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(n)}</span>
-      <span>${"█".repeat(Math.max(1, Math.round(v / amx * 12)))}</span><span class="muted">${v}</span></div>`).join("")}
-  </div>`;
-}
-
-async function loadCommits() {
-  const tok = ++commitsTok;
-  const ref = $("#commits-ref").value;
-  const limit = +$("#commits-size").value;
-  const page = commitsPage;
-  const q = `limit=${limit}&page=${page}&ref=${encodeURIComponent(ref)}`;
-  const { commits } = await api(`/api/${repo}/commits?${q}`);
-  if (tok !== commitsTok) return;
-  commitsLoaded = commits.length;
-  renderCommitsInfo();
-  renderCommitsFig(commits);
-  $("#commits-list").innerHTML = commits.map(c => `
-    <div class="card"><div class="row" data-cid="${c.id}">
-      <span class="sha" data-sha="${c.id}">${c.short_id}</span>
-      <span>${escapeHtml(c.summary)}</span>
-        <span class="badge cs">stats…</span>
-        <span class="muted" style="margin-left:auto">${escapeHtml(c.author)} · ${new Date(c.time*1000).toLocaleString()}</span>
-    </div></div>`).join("");
-  document.querySelectorAll("#commits-list .row[data-cid]").forEach(el => el.onclick = () => {
-    const sha = el.querySelector(".sha");
-    setRef("base-ref", sha.dataset.sha + "^", sha.textContent + "^");
-    setRef("head-ref", sha.dataset.sha, sha.textContent);
-    document.querySelector('nav button[data-tab="compare"]').click();
-    $("#diff-btn").click();
-  });
-
-  api(`/api/${repo}/commits?${q}&stats=1`).then(({ commits: ws }) => {
-    if (tok !== commitsTok) return;
-    const m = new Map(ws.map(c => [c.id, c]));
-    document.querySelectorAll("#commits-list .row[data-cid]").forEach(el => {
-      const c = m.get(el.dataset.cid);
-        if (c) el.querySelector(".cs").innerHTML =
-          `<span class="muted">${c.files_changed} files</span> · <span class="a">+${c.additions}</span> <span class="d">−${c.deletions}</span>`;
-    });
-  }).catch(() => {});
-
-  if (commitTotal === null) {
-    api(`/api/${repo}/commits?ref=${encodeURIComponent(ref)}&count=1`).then(r => {
-      if (tok !== commitsTok) return;
-      commitTotal = r.count;
-      renderCommitsInfo();
-    }).catch(() => {});
-  }
-}
-$("#commits-ref").onchange = () => { commitsPage = 1; commitTotal = null; loadCommits(); };
-$("#commits-size").onchange = () => { commitsPage = 1; loadCommits(); };
-$("#commits-prev").onclick = () => { if (commitsPage > 1) { commitsPage--; loadCommits(); } };
-$("#commits-next").onclick = () => { commitsPage++; loadCommits(); };
-
-function setRef(selId, value, label) {
-  const sel = $("#" + selId);
-  if (![...sel.options].some(o => o.value === value)) {
-    const o = document.createElement("option");
-    o.value = value;
-    o.textContent = label;
-    sel.appendChild(o);
-  }
-  sel.value = value;
-}
-
-  let searchTok = 0, searchDeb = 0, searchTerms = [], searchRef = "", blobTok = 0, searchSelectTok = 0;
-
-function asciiLower(s) { return s.replace(/[A-Z]/g, c => String.fromCharCode(c.charCodeAt(0) + 32)); }
-function highlight(text, terms) {
-    const marks = [];
+/* ═══════════════ highlight (search marks) ═══════════════ */
+function hlTerms(text, terms) {
+  if (!terms || !terms.length) return esc(text);
+  const marks = [];
   const low = asciiLower(text);
   for (const t of terms) {
-    const needle = asciiLower(t);
     if (!t) continue;
+    const needle = asciiLower(t);
     let i = 0, j;
-      while ((j = low.indexOf(needle, i)) !== -1) { marks.push([j, j + needle.length]); i = j + needle.length; }
+    while ((j = low.indexOf(needle, i)) !== -1) { marks.push([j, j + needle.length]); i = j + needle.length; }
   }
-  if (!marks.length) return escapeHtml(text);
+  if (!marks.length) return esc(text);
   marks.sort((a, b) => a[0] - b[0]);
   const merged = [marks[0]];
   for (const m of marks.slice(1)) {
@@ -752,498 +870,1234 @@ function highlight(text, terms) {
     else merged.push(m);
   }
   let out = "", pos = 0;
-  for (const [s, e] of merged) { out += escapeHtml(text.slice(pos, s)) + "<mark>" + escapeHtml(text.slice(s, e)) + "</mark>"; pos = e; }
-  return out + escapeHtml(text.slice(pos));
-}
-  async function openBlob(path, line = null) {
-      const tok = ++blobTok;
-    const queryTok = searchTok;
-    const repoAtRequest = repo;
-    const refAtRequest = searchRef;
-    const termsAtRequest = searchTerms.slice();
-    const el = $("#search-results .search-detail") || $("#search-view");
-    el.style.display = "block";
-  el.innerHTML = '<span class="muted">loading…</span>';
-  try {
-      const b = await api(`/api/${repoAtRequest}/blob?ref=${encodeURIComponent(refAtRequest)}&path=${encodeURIComponent(path)}`);
-      if (tok !== blobTok || queryTok !== searchTok || repoAtRequest !== repo || refAtRequest !== searchRef) return;
-      const body = b.binary ? '<span class="muted">binary file</span>' : fileView(b.text, termsAtRequest, line);
-        el.innerHTML = `<div class="fig" data-title="[ FILE ]" style="margin-top:0">
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">
-              <b style="font-size:13px">${escapeHtml(path)}</b>
-              <span class="muted">${b.truncated ? "truncated" : ""}</span>
-            </div>
-            <div class="blob-view">${body}</div>
-          </div>`;
-      if (line) {
-        const target = el.querySelector(`.frow[data-line="${line}"]`);
-        if (target) { target.scrollIntoView({ behavior: "smooth", block: "center" }); target.classList.add("search-line-active"); }
-      } else el.scrollIntoView({ behavior: "smooth", block: "start" });
-      return { binary: b.binary, text: b.text };
-    } catch (e) { if (tok === blobTok && queryTok === searchTok) el.innerHTML = `<span class="muted">${escapeHtml(String(e))}</span>`; }
+  for (const [s, e] of merged) { out += esc(text.slice(pos, s)) + "<mark>" + esc(text.slice(s, e)) + "</mark>"; pos = e; }
+  return out + esc(text.slice(pos));
 }
 
-const FILE_CTX = 2, FILE_MAX_HUNKS = 120, FILE_MAX_LINES = 200, FILE_LINE_MAX = 400;
-  function fileView(text, terms, focusLine = null) {
-  const lines = text.split("\n");
-  const cut = (l) => {
-    if (l.length <= FILE_LINE_MAX) return l;
-      const low = asciiLower(l);
-      const at = terms.map(t => low.indexOf(asciiLower(t))).filter(i => i >= 0).sort((a, b) => a - b)[0] ?? 0;
-    const start = Math.min(Math.max(0, at - Math.floor(FILE_LINE_MAX / 3)), l.length - FILE_LINE_MAX);
-    return (start ? "…" : "") + l.slice(start, start + FILE_LINE_MAX) + (start + FILE_LINE_MAX < l.length ? "…" : "");
+/* ═══════════════ tabs / routing ═══════════════ */
+const TABS = ["files", "search", "commits", "compare", "pulls"];
+let hashGuard = false; // set while our own pushState is in flight (skip hashchange)
+function setTab(tab, opts = {}) {
+  if (!TABS.includes(tab)) tab = "files";
+  S.tab = tab;
+  $$("#activity .act[data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  renderSide();
+  renderMain();
+  if (!opts.silent) { hashGuard = true; saveHash(true); queueMicrotask(() => { hashGuard = false; }); }
+}
+$$("#activity .act[data-tab]").forEach(b => b.onclick = () => setTab(b.dataset.tab));
+
+function saveHash(push) {
+  const p = new URLSearchParams();
+  if (S.repo) p.set("r", S.repo);
+  p.set("t", S.tab);
+  if (S.ref !== "HEAD") p.set("ref", S.ref);
+  if (S.path) p.set("p", S.path);
+  if (S.tab === "compare" && S.base) { p.set("b", S.base); p.set("h", S.head || S.base); }
+  const s = "#" + p.toString();
+  if (s === location.hash) return; // no-op
+  if (push) history.pushState(null, "", s);
+  else history.replaceState(null, "", s);
+}
+function loadHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  return {
+    repo: p.get("r"), tab: p.get("t") || "files",
+    ref: p.get("ref") || "HEAD", path: p.get("p"),
+    base: p.get("b"), head: p.get("h"),
   };
-  if (!terms.length) {
-    const shown = lines.slice(0, FILE_MAX_LINES)
-      .map((l, i) => `<div class="frow"><span class="fgut">${i + 1}</span><span class="ftxt">${escapeHtml(cut(l))}</span></div>`).join("");
-    const more = lines.length > FILE_MAX_LINES
-      ? `<div class="muted" style="padding:6px 12px">… first ${FILE_MAX_LINES} of ${lines.length} lines</div>` : "";
-    return `<div class="fview">${shown}</div>${more}`;
-  }
-    const tl = terms.map(asciiLower).filter(Boolean);
-    const keep = [];
-    for (let i = 0; i < lines.length; i++) {
-      const l = asciiLower(lines[i]);
-      if (tl.some(t => l.includes(t))) keep.push(i);
-    }
-    if (focusLine && !keep.includes(focusLine - 1)) keep.push(focusLine - 1);
-    keep.sort((a, b) => a - b);
-  if (!keep.length) {
-    return fileView(text, []);
-  }
-  const hunks = [];
-  for (const i of keep) {
-    const s = Math.max(0, i - FILE_CTX), e = Math.min(lines.length - 1, i + FILE_CTX);
-    const last = hunks[hunks.length - 1];
-    if (last && s <= last.e + 1) last.e = e;
-    else hunks.push({ s, e });
-  }
-  const focusedHunk = focusLine ? hunks.findIndex(h => focusLine - 1 >= h.s && focusLine - 1 <= h.e) : -1;
-  const shown = hunks.slice(0, FILE_MAX_HUNKS);
-  if (focusedHunk >= FILE_MAX_HUNKS) shown[FILE_MAX_HUNKS - 1] = hunks[focusedHunk];
-  const parts = [];
-  for (let h = 0; h < shown.length; h++) {
-    if (h) parts.push(`<div class="frow fsep"><span class="fgut">⋯</span><span class="ftxt"></span></div>`);
-    for (let i = shown[h].s; i <= shown[h].e; i++)
-        parts.push(`<div class="frow${focusLine === i + 1 ? ' search-line-active' : ''}" data-line="${i + 1}"><span class="fgut">${i + 1}</span><span class="ftxt">${highlight(cut(lines[i]), terms)}</span></div>`);
-  }
-  const more = hunks.length > shown.length
-    ? `<div class="muted" style="padding:6px 12px">… ${hunks.length - shown.length} more hunks</div>` : "";
-  return `<div class="fview">${parts.join("")}</div>${more}`;
 }
-async function doSearch() {
-  const q = $("#search-q").value.trim();
-  const contentTerms = q.split(/\s+/).filter(t => /^(grep|content):/i.test(t)).map(t => t.slice(t.indexOf(":") + 1).toLowerCase());
-  const hasContentSearch = contentTerms.some(Boolean);
-  const pathTerms = q.split(/\s+/).filter(t => t && !t.startsWith("-") && !/^(ext|grep|content):/i.test(t)).map(t => t.toLowerCase());
-  const searchHighlights = pathTerms.concat(contentTerms);
-  const tok = ++searchTok;
-  ++blobTok;
-  searchSelectTok++;
-  $("#search-view").style.display = "none";
-  if (!repo || !q) { searchSelectTok++; $("#search-info").textContent = ""; $("#search-results").innerHTML = ""; return; }
-  searchRef = $("#search-ref").value;
-  try {
-    const r = await api(`/api/${repo}/search?ref=${encodeURIComponent(searchRef)}&q=${encodeURIComponent(q)}`);
-    if (tok !== searchTok) return;
-      searchTerms = searchHighlights;
-      const fileCount = hasContentSearch ? r.content_files : r.files;
-      $("#search-info").textContent =
-        `${fileCount} file${fileCount === 1 ? "" : "s"} · ${r.matches.length} match${r.matches.length === 1 ? "" : "es"} · ${r.took_ms} ms${r.truncated ? " · partial" : ""}`;
-      const byPath = new Map();
-      for (const m of r.matches) {
-        if (!byPath.has(m.path)) byPath.set(m.path, []);
-        byPath.get(m.path).push(m);
-      }
-      const results = hasContentSearch
-        ? [...byPath].map(([path, ms]) => ({ path, score: null, matches: ms }))
-        : (r.hits || []).slice(0, 100).map(f => ({ ...f, matches: [] }));
-      const list = results.map((f, i) => `<div class="card search-hit${i === 0 ? ' active' : ''}" data-p="${escapeAttr(f.path)}" data-line="${f.matches[0]?.line || ''}">
-        <div class="row" style="padding:9px 12px;align-items:flex-start">
-          <span style="font-family:var(--font-mono);font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(f.path)}</span>
-          <span class="badge">${hasContentSearch ? `${f.matches.length} lines` : `score ${f.score}`}</span>
-        </div>${f.matches.slice(0, 3).map(m => `<div class="row search-preview" style="padding:3px 12px 7px;gap:8px;font-family:var(--font-mono);font-size:11px" data-line="${m.line}">
-          <span class="muted" style="min-width:32px;text-align:right">${m.line}</span><span class="search-preview">${highlight(m.text, contentTerms)}</span></div>`).join("")}</div>`).join("");
-      const lineCount = r.matches.length;
-      const detail = results.length ? '<div class="search-detail"><div class="fig" data-title="[ SELECT A RESULT ]"><span class="muted">Choose a result to preview matching lines and navigate the file.</span></div></div>' : '<div class="search-detail"><div class="fig" data-title="[ NO RESULTS ]"><span class="muted">No files matched this query.</span></div></div>';
-      $("#search-results").innerHTML = `<div class="search-list">${list || '<div class="muted">No results</div>'}</div>${detail}`;
-      const cards = [...$("#search-results").querySelectorAll(".search-hit")];
-      for (const el of cards) el.onclick = (e) => {
-        const row = e.target.closest("[data-line]");
-      const line = Number(row?.dataset.line || el.dataset.line) || null;
-      const selection = ++searchSelectTok;
-      const fileMatches = results.find(f => f.path === el.dataset.p)?.matches || [];
-      const nav = fileMatches.length > 1 ? `<div class="toolbar" style="position:sticky;top:0;background:var(--color-onyx);padding:8px;z-index:1"><button class="match-prev">‹ previous</button><span class="muted match-position">match 1/${fileMatches.length}</span><button class="match-next">next ›</button></div>` : "";
-      cards.forEach(c => c.classList.toggle("active", c === el));
-      openBlob(el.dataset.p, line).then((blob) => {
-        if (selection !== searchSelectTok) return;
-        const detail = $("#search-results .search-detail");
-        if (!fileMatches.length || !detail.querySelector(".file-body, .fig")) return;
-        const header = detail.querySelector(".fig");
-        if (header && !header.querySelector(".match-position")) header.insertAdjacentHTML("afterbegin", nav);
-        let idx = Math.max(0, fileMatches.findIndex(m => m.line === line));
-        const initialPosition = detail.querySelector(".match-position");
-        if (initialPosition) initialPosition.textContent = `match ${idx + 1}/${fileMatches.length}`;
-          const setMatch = (n) => {
-            idx = (n + fileMatches.length) % fileMatches.length;
-            const matchLine = fileMatches[idx].line;
-            const view = detail.querySelector(".blob-view");
-            if (view && blob && !blob.binary) view.innerHTML = fileView(blob.text, searchTerms, matchLine);
-            const target = detail.querySelector(`.frow[data-line="${matchLine}"]`);
-            if (target) { target.scrollIntoView({ behavior: "smooth", block: "center" }); target.classList.add("search-line-active"); }
-            const pos = detail.querySelector(".match-position"); if (pos) pos.textContent = `match ${idx + 1}/${fileMatches.length}`;
-          };
-        const prev = detail.querySelector(".match-prev"), next = detail.querySelector(".match-next");
-        if (prev) prev.onclick = () => setMatch(idx - 1);
-        if (next) next.onclick = () => setMatch(idx + 1);
-        if (window.matchMedia("(max-width: 760px)").matches) detail.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-      };
-      if (cards.length) cards[0].click();
-      if (hasContentSearch) $("#search-info").textContent = `${r.content_files} matching files · ${lineCount}${r.truncated ? '+' : ''} matching lines shown${r.truncated ? ' · partial' : ''} · ${r.took_ms} ms`;
-      else $("#search-info").textContent = `${r.files} matching paths · ${results.length} shown · ${r.took_ms} ms`;
-  } catch (e) {
-    if (tok === searchTok) $("#search-info").textContent = String(e);
+// back/forward: re-apply when the hash actually differs from current state
+addEventListener("hashchange", () => {
+  if (hashGuard) return;
+  const h = loadHash();
+  if (h.repo && h.repo !== S.repo) { S.repo = h.repo; $("#repo-select").value = h.repo; onRepoChange({ ...h, base: null, head: null }); return; }
+  if (h.tab !== S.tab) setTab(h.tab, { silent: true });
+  if (h.ref !== S.ref) {
+    S.ref = h.ref; $("#st-ref").textContent = h.ref;
+    treeCache.clear(); expanded.clear(); filesCache = null; pal.all = null; pal.lc = null;
+    searchState.results = null; searchState.flat = null;
+    diffState.summary = null; diffState.files = null; diffState.sel = -1;
+    commitsState.page = 1; commitsState.total = null; commitsState.last = null; commitsState.stats = null;
+    fillRefSelect($("#files-ref"), S.ref); // may be null on non-files tabs — guard
+    loadTree("");
+    if (S.tab === "search") doSearch();
+    else if (S.tab === "commits") loadCommits();
+    else if (S.tab === "compare") runDiff();
+    else renderMain();
   }
-}
-$("#search-q").addEventListener("input", () => { clearTimeout(searchDeb); searchDeb = setTimeout(doSearch, 250); });
-$("#search-ref").onchange = doSearch;
+  if (h.path !== S.path) { S.path = h.path; if (S.tab === "files") renderMain(); }
+  // apply base/head from hash (Back/Forward between commit diffs)
+  if (S.tab === "compare" && (h.base !== S.base || h.head !== S.head)) {
+    if (h.base) S.base = h.base;
+    if (h.head) S.head = h.head;
+    fillRefSelect($("#base-ref"), S.base);
+    fillRefSelect($("#head-ref"), S.head);
+    runDiff();
+  }
+});
 
-// in-app diff find
-  let diffFilesCache = [];
-  let diffViewTok = 0;
-  let findMatches = [], findIdx = -1, findTerm = "";
-function renderDiffFiles(files) {
-  diffFilesCache = files;
-  const filter = $("#diff-filter").value.trim().toLowerCase();
-  const shown = filter ? files.filter(f => f.path.toLowerCase().includes(filter)) : files;
-  const summary = $("#diff-summary .changes-overview");
-    if (summary) {
-      const status = filter ? `${shown.length} of ${files.length} files` : `${files.length} files`;
-      summary.querySelector(".file-count").textContent = status;
-    }
-  const nav = $("#diff-summary .diff-files");
-  const detail = $("#diff-summary .diff-detail");
-  if (!nav || !detail) return;
-  const selected = Number(detail.querySelector(".file-body")?.dataset.fileIndex ?? NaN);
-  if (Number.isFinite(selected) && !shown.some(f => files.indexOf(f) === selected)) {
-    ++diffViewTok;
-    vclose(detail);
-    detail.innerHTML = "";
-  }
-  nav.innerHTML = shown.map(f => `
-      <div class="card"><div class="card-h" data-file-index="${files.indexOf(f)}">
-        <span class="status ${f.status}">${f.status}</span>
-        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(f.path)}</span>
-        <span class="stat">${f.binary ? '<span class="muted">bin</span>' : `<span class="a">+${f.additions}</span> <span class="d">−${f.deletions}</span>`}</span>
-      </div></div>`).join("");
-    nav.querySelectorAll(".card-h").forEach(h => h.onclick = () => {
-      nav.querySelectorAll(".card-h").forEach(x => x.parentElement.classList.toggle("open", x === h));
-      showDiffFile(Number(h.dataset.fileIndex), true);
-    });
-  if (!shown.length) {
-    ++diffViewTok;
-    vclose(detail);
-    detail.innerHTML = '<div class="fig"><span class="muted">No files match this filter.</span></div>';
-  } else if (!shown.some(f => files.indexOf(f) === selected)) {
-    vclose(detail);
-    detail.innerHTML = "";
-    showDiffFile(files.indexOf(shown[0]), false);
-  }
-
+/* ═══════════════ repos / refs ═══════════════ */
+async function refreshRepos() {
+  const { repos } = await api("/api/repos");
+  const sel = $("#repo-select");
+  sel.innerHTML = "";
+  repos.forEach(r => { const o = document.createElement("option"); o.value = r; o.textContent = r; sel.appendChild(o); });
+  if (!repos.length) { $("#side-body").innerHTML = '<div class="empty">No repositories yet.<br><br><b>xlr8 owner/repo</b> on the CLI to open one.</div>'; return; }
+  const h = loadHash();
+  S.repo = (h.repo && repos.includes(h.repo)) ? h.repo : repos[0];
+  sel.value = S.repo;
+  await onRepoChange(h);
 }
-$("#diff-filter").addEventListener("input", () => {
-  if (diffFilesCache.length) renderDiffFiles(diffFilesCache);
-});
-function diffFind(q) {
-  findMatches = []; findIdx = -1; findTerm = q.toLowerCase();
-  if (!findTerm) { $("#diff-info").textContent = diffInfoLast; return; }
-  for (let vi = 0; vi < VREG.length; vi++) {
-    const e = VREG[vi];
-    if (!e || !e.rows) continue;
-    for (let ri = 0; ri < e.rows.length; ri++) {
-      const r = e.rows[ri];
-      if (r[0] !== "h" && r[0] !== "g" && String(r[3]).toLowerCase().includes(findTerm)) {
-        findMatches.push({ vi, ri });
-      }
-    }
-  }
-  if (findMatches.length) {
-    findIdx = 0;
-    jumpToMatch();
-  } else {
-    $("#diff-info").textContent = "no matches";
-  }
-}
-function jumpToMatch() {
-  if (findIdx < 0 || findIdx >= findMatches.length) return;
-  const m = findMatches[findIdx];
-  const e = VREG[m.vi];
-  if (!e || !e.tops) return;
-  const box = document.querySelector(`.vlines[data-v="${m.vi}"]`);
-  if (box) {
-    voff(box);
-    const target = box._off + e.tops[m.ri] - innerHeight / 2 + 11;
-    scrollTo({ top: Math.max(0, target), behavior: "smooth" });
-  }
-  $("#diff-info").textContent = `match ${findIdx + 1}/${findMatches.length}`;
-}
-$("#diff-find").addEventListener("input", () => {
-  clearTimeout(window._findDeb);
-  window._findDeb = setTimeout(() => diffFind($("#diff-find").value.trim()), 200);
-});
-$("#diff-find").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    if (findMatches.length) {
-      findIdx = e.shiftKey ? (findIdx - 1 + findMatches.length) % findMatches.length
-                           : (findIdx + 1) % findMatches.length;
-      jumpToMatch();
-    }
-  }
-  if (e.key === "Escape") { $("#diff-find").value = ""; diffFind(""); }
-});
-addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === "f") {
-    const cmp = $("#tab-compare");
-    if (cmp && cmp.style.display !== "none") {
-      e.preventDefault();
-      $("#diff-find").focus();
-      $("#diff-find").select();
-    }
-    return;
-  }
-  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
-  if (e.key === "/" && $("#tab-compare").style.display !== "none") {
-    e.preventDefault();
-    $("#diff-filter").focus();
-    $("#diff-filter").select();
-    return;
-  }
-  const tabMap = { "1": "commits", "2": "compare", "3": "search", "4": "pulls" };
-  if (tabMap[e.key]) {
-    document.querySelector(`nav button[data-tab="${tabMap[e.key]}"]`).click();
-    return;
-  }
-    if ((e.key === "j" || e.key === "k") && $("#tab-compare").style.display !== "none") {
-      const cards = [...document.querySelectorAll("#diff-summary .diff-files .card-h[data-file-index]")];
-      if (!cards.length) return;
-      e.preventDefault();
-      const openIdx = cards.findIndex(c => c.parentElement.classList.contains("open"));
-      const next = e.key === "j"
-        ? (openIdx < cards.length - 1 ? openIdx + 1 : 0)
-        : (openIdx > 0 ? openIdx - 1 : cards.length - 1);
-      cards.forEach((card, i) => card.parentElement.classList.toggle("open", i === next));
-      showDiffFile(Number(cards[next].dataset.fileIndex), true);
-      cards[next].scrollIntoView({ block: "nearest" });
-    }
-});
-let diffInfoLast = "";
-$("#diff-btn").onclick = async () => {
-  const base = $("#base-ref").value, head = $("#head-ref").value;
-  $("#diff-info").textContent = "computing…";
-  const t0 = performance.now();
+$("#repo-select").onchange = (e) => { S.repo = e.target.value; S.path = null; S.dir = ""; onRepoChange({ repo: S.repo }); };
+$("#sync-btn").onclick = async () => {
+  if (!S.repo) return;
+  toast("syncing…");
   try {
-    const s = await api(`/api/${repo}/diff?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
-    diffInfoLast = `${s.files.length} files  +${s.total_additions} −${s.total_deletions}  (${Math.round(performance.now()-t0)}ms)`;
-    $("#diff-info").textContent = diffInfoLast;
-    diffBase = base; diffHead = head;
-    vclose($("#diff-summary"));
-    $("#diff-filter").value = ""; $("#diff-find").value = "";
-    findMatches = []; findIdx = -1;
-      $("#diff-summary").innerHTML =
-        `<div class="fig changes-overview" data-title="[ CHANGES ]">
-          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-            <b>${escapeHtml(base)} → ${escapeHtml(head)}</b>
-            <span class="file-count">${s.files.length} files</span>
-            <span class="a">+${s.total_additions}</span><span class="d">−${s.total_deletions}</span>
-            <span class="muted">${Math.round(performance.now() - t0)} ms</span>
-            <button id="diff-expand-all" type="button">expand all</button><button id="diff-collapse-all" type="button">collapse all</button>
-          </div></div>
-          <div class="diff-layout"><div class="diff-files"></div><div class="diff-detail"><div class="fig"><span class="muted">Select a file to view its diff.</span></div></div></div>`;
-      renderDiffFiles(s.files);
-      const viewToken = ++diffViewTok;
-      $("#diff-expand-all").onclick = async () => {
-        const nav = $("#diff-summary .diff-files");
-        for (const h of nav.querySelectorAll(".card-h")) {
-          if (viewToken !== diffViewTok) return;
-          await showDiffFile(Number(h.dataset.fileIndex), false, viewToken);
-        }
-      };
-      $("#diff-collapse-all").onclick = () => {
-        ++diffViewTok;
-        const detail = $("#diff-summary .diff-detail");
-        vclose(detail); detail.innerHTML = '<div class="fig"><span class="muted">Select a file to view its diff.</span></div>';
-      };
-  } catch (e) {
-    $("#diff-info").textContent = "";
-    toast("diff failed: " + e.message);
-  }
+    const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ repo: S.repo }) });
+    if (!r.ok) throw new Error((await r.text().catch(() => "")) || r.status);
+    toast("synced");
+  treeCache.clear(); blobCache.clear(); metaCache.clear(); filesCache = null; expanded.clear(); pal.all = null; pal.lc = null;
+  await onRepoChange();
+  } catch (e) { toast("sync failed: " + e); }
 };
 
-let diffBase = "", diffHead = "";
-  async function showDiffFile(index, replace = true, viewToken = diffViewTok) {
-    const file = diffFilesCache[index];
-    if (!file) return;
-    const nav = $("#diff-summary .diff-files");
-    const detail = $("#diff-summary .diff-detail");
-    const h = nav.querySelector(`.card-h[data-file-index="${index}"]`);
-    if (replace) { vclose(detail); detail.innerHTML = ""; }
-    let card = detail.querySelector(`.file-body[data-file-index="${index}"]`);
-    if (card) { card.parentElement.scrollIntoView({ block: "nearest" }); return; }
-    card = document.createElement("div");
-    card.className = "card file-body";
-    card.dataset.fileIndex = index;
-    card.innerHTML = `<div class="card-h"><span class="status ${file.status}">${file.status}</span><span>${escapeHtml(file.path)}</span><span class="stat"><span class="a">+${file.additions}</span> <span class="d">−${file.deletions}</span></span></div><div class="file-loading">loading…</div>`;
-    detail.appendChild(card);
-    if (h) h.parentElement.classList.add("open");
-    let u = `/api/${repo}/file?base=${encodeURIComponent(diffBase)}&head=${encodeURIComponent(diffHead)}&path=${encodeURIComponent(file.path)}`;
-    if (file.old_path && file.old_path !== file.path) u += `&old_path=${encodeURIComponent(file.old_path)}`;
-    try {
-      const fd = await api(u);
-      if (!card.isConnected || viewToken !== diffViewTok) return;
-      card.querySelector(".file-loading").outerHTML = fileBody(fd, file.path);
-      vmount(card);
-    } catch (e) { if (card.isConnected) card.querySelector(".file-loading").textContent = `failed: ${e.message}`; }
-  }
-
-// virtualized diff rows
-const VREG = [];
-const vboxes = new Set();
-const V_H = [22, 27, 27];
-let vframe = 0;
-
-function vmount(scope) {
-  const box = scope.querySelector(".vlines");
-  if (!box) return;
-  vboxes.add(box);
-  box.addEventListener("scroll", hsync, { passive: true });
-  vshift();
-  hsync();
-}
-function vclose(scope) {
-  for (const b of scope.querySelectorAll(".vlines")) {
-    vboxes.delete(b);
-    const e = VREG[b.dataset.v | 0];
-    if (e) { e.rows = null; e.tops = null; }
-  }
-  hsync();
-}
-function voff(box) { box._off = box.getBoundingClientRect().top + scrollY; }
-function vshift() { vboxes.forEach(voff); vpump(); }
-function vpump() {
-  if (vframe) return;
-  vframe = requestAnimationFrame(() => { vframe = 0; vboxes.forEach(vslice); });
-}
-function vfind(tops, x) {
-  let lo = 0, hi = tops.length - 1;
-  while (lo < hi) { const m = (lo + hi) >> 1; if (tops[m] < x) lo = m + 1; else hi = m; }
-  return lo;
-}
-function vslice(box) {
-  const e = VREG[box.dataset.v | 0];
-  if (!e || !e.rows) return;
-  const start = scrollY - box._off - 600, end = scrollY - box._off + innerHeight + 600;
-  if (end < 0 || start > e.tops[e.rows.length]) return;
-  const i = Math.max(0, vfind(e.tops, start) - 1);
-  const j = Math.min(e.rows.length, vfind(e.tops, end) + 1);
-  if (box._i === i && box._j === j) return;
-  let html = "";
-  for (let k = i; k < j; k++) html += vrow(e.rows[k], e.tops[k]);
-  box.innerHTML = html;
-  box._i = i; box._j = j;
-}
-function vrow(r, top) {
-  if (r[0] === "h") return `<div class="hunk-h" style="top:${top}px">${r[1]}</div>`;
-  if (r[0] === "g") return `<div class="gap" style="top:${top}px">${r[1]}</div>`;
-  return `<div class="ln ${r[0]}" style="top:${top}px">
-    <span class="n">${r[1]}</span><span class="n2">${r[2]}</span><span class="t">${escapeHtml(r[3]) || " "}</span></div>`;
+async function onRepoChange(h = {}) {
+  const sameRepo = !h.repo; // called with no explicit repo change = sync (same repo)
+  $("#st-repo").textContent = S.repo || "";
+  treeCache.clear(); blobCache.clear(); metaCache.clear(); filesCache = null; expanded.clear(); pal.all = null; pal.lc = null;
+  // reset per-repo UI state so nothing leaks across repos
+  searchState.lastQ = ""; searchState.results = null; searchState.flat = null; searchState.selIdx = 0;
+  diffState.summary = null; diffState.files = null; diffState.sel = -1; diffState.rows = null;
+  diffState.find = { matches: [], idx: -1, q: "" }; diffState.info = "";
+  commitsState.page = 1; commitsState.total = null; commitsState.last = null; commitsState.stats = null;
+  pal.all = null;
+  // sync (same repo): preserve open file + tab; repo switch: reset path
+  S.path = sameRepo ? S.path : (h.path || null);
+  S.dir = "";
+  try {
+    const { refs } = await api(`/api/${S.repo}/refs`);
+    S.refs = refs;
+    const names = refs.map(r => r.name);
+    const pref = ["main", "master"];
+    const defRef = pref.find(n => names.includes(n)) || names[0] || "HEAD";
+  S.ref = h.ref && names.includes(h.ref) ? h.ref : (sameRepo && names.includes(S.ref) ? S.ref : defRef);
+  // default compare to HEAD~1...HEAD so the first visit shows a real diff;
+  // on sync (same repo, no explicit base/head in hash) preserve user's range
+  S.base = h.base || (sameRepo && S.base ? S.base : (names.includes(defRef) ? defRef + "~1" : defRef));
+  S.head = h.head || (sameRepo && S.head ? S.head : defRef);
+    $("#st-ref").textContent = S.ref;
+    setTab(h.tab || (sameRepo ? S.tab : "files"), { silent: true });
+    saveHash(); // keep hash in sync with actual state after any repo/sync change
+    if (S.path && S.tab === "files") openFile(S.path);
+    else if (S.tab === "search" && searchState.lastQ) doSearch();
+    else if (S.tab === "commits") loadCommits();
+    else if (S.tab === "compare" && S.base && S.head) runDiff();
+  } catch (e) { toast("repo load failed: " + e); }
 }
 
-// sticky horizontal scrollbar — mirrors the most-visible open diff
-const hscroll = $("#hscroll");
-const hscrollInner = hscroll.firstElementChild;
-let hbox = null;
-function hsync() {
-  let best = null, bestVis = 0;
-  for (const b of vboxes) {
-    const r = b.getBoundingClientRect();
-    const vis = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
-    if (vis > bestVis) { bestVis = vis; best = b; }
+/* ═══════════════ sidebar (per tab) ═══════════════ */
+function renderSide() {
+  const t = $("#side-title"), sub = $("#side-sub"), body = $("#side-body");
+  sub.style.display = "none"; sub.innerHTML = "";
+  if (S.tab === "files") {
+    t.textContent = "Explorer";
+    body.innerHTML = `
+      <div style="padding:6px 8px;border-bottom:1px solid var(--bd);display:flex;gap:6px">
+        <select id="files-ref" style="flex:1;min-width:0"></select>
+      </div>
+      <div style="padding:6px 8px;border-bottom:1px solid var(--bd)">
+        <input id="tree-filter" type="search" placeholder="Filter files  (Ctrl+P quick open)" style="width:100%">
+      </div>
+      <div id="tree"><div class="empty">loading…</div></div>`;
+    fillRefSelect($("#files-ref"), S.ref);
+    $("#files-ref").onchange = (e) => {
+      S.ref = e.target.value; $("#st-ref").textContent = S.ref;
+      treeCache.clear(); expanded.clear(); filesCache = null; pal.all = null; pal.lc = null;
+      // reset cross-tab data computed against the old ref
+      searchState.results = null; searchState.flat = null; searchState.selIdx = 0;
+      diffState.summary = null; diffState.files = null; diffState.sel = -1; diffState.rows = null; diffState.info = "";
+      commitsState.page = 1; commitsState.total = null; commitsState.last = null; commitsState.stats = null;
+      S.base = S.ref; S.head = S.ref;
+      S.path = null;
+      loadTree("");
+      if (S.tab === "files") renderMain();
+      saveHash();
+    };
+    $("#tree-filter").addEventListener("input", onTreeFilter);
+    $("#tree-filter").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.target.value = ""; onTreeFilter(); e.target.blur(); } if (e.key === "Enter") { e.preventDefault(); const first = $("#tree .tnode.file"); if (first) { openFile(first.dataset.file); } } });
+    loadTree("");
+  } else if (S.tab === "search") {
+    t.textContent = "Search";
+    sub.style.display = "flex";
+    sub.innerHTML = `
+      <select id="search-ref" style="flex:1;min-width:0"></select>
+      <span class="dim" id="search-info"></span>
+      <input id="search-q" type="search" placeholder="path words · grep:text · ext:rs · -neg" style="width:100%;margin-top:6px">`;
+    fillRefSelect($("#search-ref"), S.ref);
+    body.innerHTML = '<div id="search-hits"></div>';
+    $("#search-q").addEventListener("input", debounce(doSearch, 220));
+    $("#search-q").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.target.value = ""; doSearch(); e.target.blur(); e.stopPropagation(); } });
+    $("#search-ref").onchange = doSearch;
+    if (searchState.lastQ) { $("#search-q").value = searchState.lastQ; if (searchState.results) renderSearchHits(); }
+  } else if (S.tab === "commits") {
+    t.textContent = "Commits";
+    sub.style.display = "flex";
+    sub.innerHTML = `
+      <select id="commits-ref" style="flex:1;min-width:0"></select>
+      <select id="commits-size" title="per page"><option>25</option><option${commitsState.limit === 50 ? " selected" : ""}>50</option><option${commitsState.limit === 100 ? " selected" : ""}>100</option><option${commitsState.limit === 200 ? " selected" : ""}>200</option></select>
+      <span class="dim" id="commits-info"></span>
+      <span style="flex:1"></span>
+      <button id="commits-prev">‹</button><button id="commits-next">›</button>`;
+    fillRefSelect($("#commits-ref"), S.ref);
+    body.innerHTML = '<div id="commits-side"></div>';
+    $("#commits-ref").onchange = () => {
+      commitsState.page = 1; commitsState.total = null; commitsState.last = null; commitsState.stats = null;
+      const refVal = $("#commits-ref")?.value || S.ref;
+      const tbRef = $("#commits-toolbar-ref");
+      if (tbRef) tbRef.textContent = refVal;
+      loadCommits();
+    };
+    $("#commits-size").onchange = () => { commitsState.page = 1; loadCommits(); };
+    $("#commits-prev").onclick = () => { if (commitsState.page > 1) { commitsState.page--; loadCommits(); } };
+    $("#commits-next").onclick = () => { commitsState.page++; loadCommits(); };
+    loadCommits();
+  } else if (S.tab === "compare") {
+    t.textContent = "Compare";
+    sub.style.display = "flex";
+    sub.innerHTML = `
+      <select id="base-ref" style="flex:1;min-width:0" title="base"></select>
+      <span class="dim">…</span>
+      <select id="head-ref" style="flex:1;min-width:0" title="head"></select>
+      <button id="diff-btn" style="flex:none">DIFF</button>
+      <input id="diff-filter" type="search" placeholder="filter files" style="width:100%;margin-top:6px">`;
+    fillRefSelect($("#base-ref"), S.base || S.ref);
+    fillRefSelect($("#head-ref"), S.head || S.ref);
+    // state refs like "sha^" / "main~1" aren't real branch names — inject them
+    for (const [sel, val] of [[$("#base-ref"), S.base], [$("#head-ref"), S.head]]) {
+      if (val && ![...sel.options].some(o => o.value === val)) {
+        const o = document.createElement("option");
+        o.value = val; o.textContent = val;
+        sel.insertBefore(o, sel.firstChild);
+        sel.value = val;
+      }
+    }
+    // HEAD~1 shortcut
+    for (const sel of [$("#base-ref"), $("#head-ref")]) {
+      if (sel && ![...sel.options].some(o => o.value === "HEAD~1")) {
+        const o = document.createElement("option");
+        o.value = "HEAD~1"; o.textContent = "HEAD~1";
+        sel.appendChild(o);
+      }
+    }
+    $("#base-ref").onchange = (e) => { S.base = e.target.value; saveHash(); };
+    $("#head-ref").onchange = (e) => { S.head = e.target.value; saveHash(); };
+    $("#diff-btn").onclick = runDiff;
+    $("#diff-filter").addEventListener("input", () => { if (diffState.files) renderDiffSide(); });
+    body.innerHTML = '<div id="diff-side"></div>';
+    if (diffState.summary) renderDiffSide();
+  } else if (S.tab === "pulls") {
+    t.textContent = "Pull Requests";
+    body.innerHTML = '<div id="pulls-side"><div class="empty">loading…</div></div>';
+    loadPullsSide();
   }
-  if (!best || best.scrollWidth <= best.clientWidth + 1) {
-    if (hbox) { hbox = null; hscroll.style.display = "none"; }
+}
+function fillRefSelect(sel, val) {
+  if (!sel) return;
+  sel.innerHTML = "";
+  S.refs.forEach(r => { const o = document.createElement("option"); o.value = r.name; o.textContent = r.name; sel.appendChild(o); });
+  if (val && [...sel.options].some(o => o.value === val)) sel.value = val;
+}
+function debounce(fn, ms) { let h; return (...a) => { clearTimeout(h); h = setTimeout(() => fn(...a), ms); }; }
+
+/* ═══════════════ file tree ═══════════════ */
+async function loadTree(dir) {
+  const key = dir;
+  if (treeCache.has(key)) { renderTree(); return; }
+  try {
+    const r = await api(`/api/${S.repo}/tree?ref=${encodeURIComponent(S.ref)}&path=${encodeURIComponent(dir)}`);
+    treeCache.set(key, r.entries);
+    renderTree();
+  } catch (e) {
+    const el = $("#tree");
+    if (el) el.innerHTML = `<div class="empty">${esc(String(e))}</div>`;
+  }
+}
+function toggleDir(dir) {
+  if (expanded.has(dir)) { expanded.delete(dir); renderTree(); }
+  else { expanded.add(dir); loadTree(dir); }
+}
+function renderTree(filter) {
+  const el = $("#tree");
+  if (!el) return;
+  const q = filter !== undefined ? filter : ($("#tree-filter")?.value || "").trim().toLowerCase();
+  if (q.length >= 2) {
+    // filter mode: flat fuzzy over full file list
+    renderTreeFilter(el, q);
     return;
   }
-  hbox = best;
-  hscroll.style.display = "block";
-  const r = best.getBoundingClientRect();
-  hscroll.style.left = r.left + "px";
-  hscroll.style.width = r.width + "px";
-  hscrollInner.style.width = best.scrollWidth + "px";
-  const bmax = best.scrollWidth - best.clientWidth;
-  const smax = hscroll.scrollWidth - hscroll.clientWidth;
-  hscroll.scrollLeft = bmax > 0 ? best.scrollLeft / bmax * smax : 0;
-}
-hscroll.addEventListener("scroll", () => {
-  if (!hbox) return;
-  const bmax = hbox.scrollWidth - hbox.clientWidth;
-  const smax = hscroll.scrollWidth - hscroll.clientWidth;
-  hbox.scrollLeft = smax > 0 ? hscroll.scrollLeft / smax * bmax : 0;
-}, { passive: true });
-addEventListener("scroll", () => { vpump(); hsync(); }, { passive: true });
-addEventListener("resize", () => { vboxes.forEach(voff); vpump(); hsync(); });
-
-function fileBody(fd, path) {
-  if (fd.binary) return `<div class="file-meta">${escapeHtml(path)} — binary file</div>`;
-  if (!fd.hunks.length) return `<div class="file-meta">no textual changes</div>`;
-  const rows = [];
-  let prev = null;
-  for (const h of fd.hunks) {
-    const gapOld = prev ? h.old_start - (prev.old_start + prev.old_count) : (h.old_count ? h.old_start - 1 : h.old_start);
-    const gapNew = prev ? h.new_start - (prev.new_start + prev.new_count) : (h.new_count ? h.new_start - 1 : h.new_start);
-    const gap = Math.max(gapOld, gapNew, 0);
-    if (gap > 0) rows.push(["g", `⋯ ${gap} lines unchanged`]);
-    rows.push(["h", `@@ -${h.old_start},${h.old_count} +${h.new_start},${h.new_count} @@`]);
-    let o = h.old_start, n = h.new_start;
-    for (const l of h.lines) {
-      let oc = "", nc = "";
-      if (l.kind === "del") oc = o++;
-      else if (l.kind === "add") nc = n++;
-      else { oc = o++; nc = n++; }
-      rows.push([l.kind === "add" ? "add" : l.kind === "del" ? "del" : "", oc, nc, l.text]);
+  let html = "";
+  const walk = (dir, depth) => {
+    const entries = treeCache.get(dir);
+    if (!entries) return;
+    for (const e of entries) {
+      const pad = 6 + depth * 14;
+      if (e.kind === "tree") {
+        const open = expanded.has(e.path);
+        html += `<div class="tnode dir" data-dir="${esc(e.path)}" style="padding-left:${pad}px">
+          <span class="chev">${open ? "▾" : "▸"}</span><span class="ficon">▣</span><span class="tname">${esc(e.name)}</span></div>`;
+        if (open) walk(e.path, depth + 1);
+      } else {
+        const sel = S.path === e.path ? " sel" : "";
+        const isGitlink = e.kind === "commit";
+        const icon = isGitlink ? "◈" : "·";
+        const cls = isGitlink ? "tnode gitlink" : "tnode file";
+        html += `<div class="${cls}${sel}" data-file="${esc(e.path)}" data-kind="${e.kind}" style="padding-left:${pad}px">
+          <span class="chev"></span><span class="ficon">${icon}</span><span class="tname">${esc(e.name)}</span></div>`;
+      }
     }
-    prev = h;
+  };
+  walk("", 0);
+  if (!html) html = '<div class="empty">empty tree</div>';
+  el.innerHTML = html;
+  // delegated handlers: one listener per event, not per node
+  el.onclick = (e) => {
+    const n = e.target.closest(".tnode");
+    if (!n) return;
+    if (n.dataset.dir !== undefined) toggleDir(n.dataset.dir);
+    else if (n.dataset.file) {
+      if (n.dataset.kind === "commit") { showGitlink(n.dataset.file); return; }
+      openFile(n.dataset.file);
+    }
+  };
+  el.onkeydown = (e) => {
+    const n = e.target.closest(".tnode");
+    if (!n) return;
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    if (n.dataset.dir !== undefined) toggleDir(n.dataset.dir);
+    else if (n.dataset.file) {
+      if (n.dataset.kind === "commit") { showGitlink(n.dataset.file); return; }
+      openFile(n.dataset.file);
+    }
+  };
+  el.querySelectorAll(".tnode").forEach(n => { n.tabIndex = 0; });
+}
+async function renderTreeFilter(el, q) {
+  const files = await getFiles();
+  const hits = fuzzyFilter(files, q, 200);
+  el.innerHTML = hits.map(p => {
+    const sel = S.path === p ? " sel" : "";
+    const name = p.split("/").pop();
+    return `<div class="tnode file${sel}" data-file="${esc(p)}" style="padding-left:10px">
+      <span class="chev"></span><span class="ficon">·</span><span class="tname">${esc(name)} <span class="dim">${esc(p.slice(0, Math.max(0, p.length - name.length - 1)))}</span></span></div>`;
+  }).join("") || '<div class="empty">no matches</div>';
+  el.onclick = (e) => {
+    const n = e.target.closest(".tnode.file");
+    if (n?.dataset.file) { openFile(n.dataset.file); }
+  };
+}
+function onTreeFilter() {
+  clearTimeout(onTreeFilter._t);
+  onTreeFilter._t = setTimeout(() => renderTree(), 80);
+}
+
+async function getFiles() {
+  const key = S.repo + "\0" + S.ref;
+  if (filesCache && filesCacheKey === key) return filesCache;
+  const r = await api(`/api/${S.repo}/files?ref=${encodeURIComponent(S.ref)}`);
+  filesCache = r.files;
+  filesCacheKey = key;
+  return filesCache;
+}
+function fuzzyFilter(list, q, limit, lowered) {
+  const lq = asciiLower(q);
+  const out = [];
+  let i = 0;
+  for (const p of list) {
+    // reuse precomputed lowercase (pal.lc) when provided — avoids O(n) regex per keystroke
+    if ((lowered ? lowered[i] : asciiLower(p)).includes(lq)) {
+      out.push(p);
+      if (out.length >= limit) break;
+    }
+    i++;
   }
-  const tops = new Int32Array(rows.length + 1);
-  for (let k = 0; k < rows.length; k++) tops[k + 1] = tops[k] + V_H[rows[k][0] === "h" ? 1 : rows[k][0] === "g" ? 2 : 0];
-  const idx = VREG.push({ rows, tops }) - 1;
-  let maxLen = 0;
-  for (const r of rows) if (r[0] !== "h" && r[0] !== "g" && r[3].length > maxLen) maxLen = r[3].length;
-  const total = fd.hunks.reduce((s, h) => s + h.lines.length, 0);
-  return `<div class="file-meta">${fd.hunks.length} hunks · ${total} lines</div>
-    <div class="vlines" data-v="${idx}" style="height:${tops[rows.length]}px;--w:calc(104px + ${maxLen}ch)"></div>`;
+  // shorter + shallower first
+  out.sort((a, b) => a.split("/").length - b.split("/").length || a.length - b.length);
+  return out;
 }
 
-async function loadPulls() {
-  try {
-    const { pulls } = await api(`/api/${repo}/pulls`);
-    $("#pulls-list").innerHTML = pulls.map(p => `
-      <div class="card"><div class="row">
-        <span class="badge">#${p.number}</span>
-        <span>${escapeHtml(p.title)}</span>
-        <span class="muted" style="margin-left:auto">@${escapeHtml(p.user)} <span class="badge">${p.state}</span></span>
+function showGitlink(path) {
+  S.path = null;
+  saveHash(); // clear p= before tab switch so renderFilesMain doesn't re-open stale file
+  setTab("files");
+  const tb = $("#toolbar"), c = $("#content"), hb = $("#hintbar");
+  tb.innerHTML = `<span class="dim mono">${esc(path)}</span><span class="grow"></span><span class="dim">submodule</span>`;
+  c.innerHTML = `<div class="empty" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+    <div class="mono" style="font-size:14px">${esc(path)}</div>
+    <div class="dim">submodule (gitlink) — contents live in another repository</div>
+  </div>`;
+  hb.innerHTML = "";
+}
+
+/* expand tree to a path (open-file navigation) */
+async function revealPath(path) {
+  // clear filter so dir nodes are visible (filter mode hides the tree structure)
+  const tf = $("#tree-filter");
+  if (tf && tf.value) { tf.value = ""; }
+  const parts = path.split("/");
+  for (let i = 1; i < parts.length; i++) {
+    const dir = parts.slice(0, i).join("/");
+    if (!expanded.has(dir)) {
+      expanded.add(dir);
+      await loadTree(dir);
+    }
+  }
+  renderTree();
+  const node = $(`#tree .tnode[data-file="${CSS.escape(path)}"]`);
+  if (node) node.scrollIntoView({ block: "nearest" });
+}
+
+/* ═══════════════ main renderers ═══════════════ */
+
+let diffVSObj = null;
+function clearVS() {
+  if (codeState.vs) { codeState.vs.destroy(); codeState.vs = null; }
+  if (diffVSObj) { diffVSObj.destroy(); diffVSObj = null; }
+  if (searchState.vs) { searchState.vs.destroy(); searchState.vs = null; }
+}
+function renderMain() {
+  clearVS();
+  const tb = $("#toolbar"), c = $("#content"), hb = $("#hintbar");
+  tb.innerHTML = ""; c.innerHTML = ""; hb.innerHTML = "";
+  c.style.display = "flex"; c.style.flexDirection = "column";
+  if (!S.repo) { c.innerHTML = '<div class="empty">No repository selected.</div>'; return; }
+  if (S.tab === "files") renderFilesMain(tb, c, hb);
+  else if (S.tab === "search") renderSearchMain(tb, c, hb);
+  else if (S.tab === "commits") renderCommitsMain(tb, c, hb);
+  else if (S.tab === "compare") renderCompareMain(tb, c, hb);
+  else if (S.tab === "pulls") renderPullsMain(tb, c, hb);
+}
+
+/* ── files tab ─────────────────────────────────────────── */
+function renderFilesMain(tb, c, hb) {
+  if (S.path) { openFile(S.path); return; }
+  // repo overview — fill the space
+  tb.innerHTML = `<span class="dim mono">${esc(S.repo)}</span><span class="dim">@</span><span class="mono">${esc(S.ref)}</span><span class="grow"></span><span class="dim">browse the tree on the left — Ctrl+P quick open</span>`;
+  c.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px;align-content:start;flex:1;min-height:0">
+      <div class="panel" style="margin:0">
+        <div class="panel-h">Repository</div>
+        <div class="panel-b">
+          <table class="table">
+            <tr><td>repo</td><td class="mono">${esc(S.repo)}</td></tr>
+            <tr><td>branch</td><td class="mono">${esc(S.ref)}</td></tr>
+            <tr><td>refs</td><td class="num">${S.refs.length}</td></tr>
+          </table>
+        </div>
       </div>
-      <div class="row"><span class="mono">${escapeHtml(p.base_ref)} ← ${escapeHtml(p.head_ref)}</span>
-      <span class="muted" style="margin-left:auto">${new Date(p.updated_at).toLocaleString()}</span></div></div>`).join("")
-      || '<span class="muted">no open pull requests</span>';
-  } catch (e) { $("#pulls-list").innerHTML = `<span class="muted">PR load failed: ${escapeHtml(String(e))} (set GITHUB_TOKEN if rate-limited)</span>`; }
+      <div class="panel" style="margin:0">
+        <div class="panel-h">Shortcuts</div>
+        <div class="panel-b" style="display:flex;flex-direction:column;gap:6px">
+          <div><kbd>Ctrl</kbd>+<kbd>P</kbd> quick open file</div>
+          <div><kbd>1</kbd>–<kbd>5</kbd> switch view</div>
+          <div><kbd>Ctrl</kbd>+<kbd>F</kbd> find (diff/file)</div>
+          <div><kbd>/</kbd> focus filter / search</div>
+          <div><kbd>j</kbd>/<kbd>k</kbd> move in lists</div>
+          <div><kbd>Esc</kbd> close palette / clear</div>
+        </div>
+      </div>
+      <div class="panel" style="margin:0;grid-column:1/-1;min-height:0;display:flex;flex-direction:column">
+        <div class="panel-h">Recent commits <span class="grow"></span><span class="dim" id="ov-count"></span></div>
+        <div id="ov-commits" style="overflow:auto;min-height:0;flex:1"><div class="empty">loading…</div></div>
+      </div>
+    </div>`;
+  api(`/api/${S.repo}/commits?ref=${encodeURIComponent(S.ref)}&limit=12`).then(({ commits }) => {
+    const el = $("#ov-commits");
+    if (!el) return;
+    if (!commits.length) { el.innerHTML = '<div class="empty">no commits</div>'; return; }
+    el.innerHTML = commits.map(c => `
+      <div class="lrow" data-cid="${c.id}">
+        <span class="sha mono">${esc(c.short_id)}</span>
+        <span class="grow">${esc(c.summary)}</span>
+        <span class="who">${esc(c.author)}</span>
+        <span class="when num">${fmtRel(c.time)}</span>
+      </div>`).join("");
+    el.querySelectorAll(".lrow").forEach(r => r.onclick = () => openCommitDiff(r.dataset.cid));
+  }).catch(e => { const el = $("#ov-commits"); if (el) el.innerHTML = `<div class="empty">${esc(String(e))}</div>`; });
+  hb.innerHTML = `<span>explorer: click dirs/files</span><span>open file → <kbd>Enter</kbd> in tree</span>`;
 }
 
-const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const escapeAttr = escapeHtml;
+let codeState = { lines: null, lang: null, states: null, vs: null, focusLine: 0, terms: [] };
+async function openFile(path, opts = {}) {
+  const wasFiles = S.tab === "files";
+  S.path = path;
+  S.tab = "files"; // set before saveHash so the hash reflects the tab we're switching to
+  codeState.lines = null; // invalidate any in-flight repaint (binary/error/switch)
+  saveHash(true);
+  if (!wasFiles) { setTab("files", { silent: true }); return; } // re-enters renderFilesMain → openFile
+  // mark tree selection
+  $$("#tree .tnode.sel").forEach(n => n.classList.remove("sel"));
+  const node = $(`#tree .tnode[data-file="${CSS.escape(path)}"]`);
+  if (node) node.classList.add("sel");
+  revealPath(path).catch(() => {});
 
-refreshRepos().then(() => { if (repo) onRepoChange(); }).catch(e => toast(String(e)));
+  const tb = $("#toolbar"), c = $("#content"), hb = $("#hintbar");
+  clearVS();
+  c.style.display = "flex"; c.style.flexDirection = "column"; c.style.overflow = "hidden";
+  tb.innerHTML = breadcrumbHTML(path);
+  bindCrumbs(tb);
+  c.innerHTML = '<div class="code-head" id="code-head" style="flex-shrink:0"><span class="dim">loading…</span></div><div class="vscroll" id="code-scroll" style="flex:1;min-height:0;overflow:auto"></div>';
+  hb.innerHTML = `<span class="dim mono" style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(S.repo)} @ ${esc(S.ref)}</span><button id="btn-wrap" class="dim">WRAP</button><span class="dim">Ctrl+F find</span>`;
+  $("#btn-wrap").onclick = () => { S.wrap = !S.wrap; paintCode(); $("#btn-wrap").classList.toggle("on", S.wrap); $("#btn-wrap").style.color = S.wrap ? "var(--acc)" : ""; };
+
+  const key = S.ref + "\0" + path;
+  let b = blobCache.get(key);
+  const tok = openFile._tok = (openFile._tok || 0) + 1;
+  try {
+    if (!b) { b = await api(`/api/${S.repo}/blob?ref=${encodeURIComponent(S.ref)}&path=${encodeURIComponent(path)}`); blobCache.set(key, b); }
+    if (tok !== openFile._tok) return;
+    renderCodeHead(b, null);
+    if (b.binary) {
+      const sc = $("#code-scroll");
+      if (sc) sc.innerHTML = `<div class="binbox">binary file — ${fmtBytes(b.size)}</div>`;
+      return;
+    }
+    codeState.lines = b.text.split("\n");
+    codeState.lang = langOf(path);
+    codeState.states = hlStates(codeState.lines, codeState.lang);
+    codeState.focusLine = opts.line || 0;
+    codeState.terms = opts.terms || [];
+    paintCode();
+    if (opts.line) {
+      const i = opts.line - 1;
+      requestAnimationFrame(() => codeState.vs && codeState.vs.scrollToRow(i, true));
+    }
+  } catch (e) {
+    if (tok === openFile._tok) { const cc = $("#content"); if (cc) cc.innerHTML = `<div class="empty">${esc(String(e))}</div>`; }
+  }
+  // git meta in parallel
+  metaFor(path).then(m => { if (openFile._tok === tok) renderCodeHead(b || { path, size: 0, lines: 0, binary: false, text: "" }, m); }).catch(() => {});
+}
+function breadcrumbHTML(path) {
+  const parts = path.split("/");
+  let html = `<span class="crumb" data-dir="">${esc(S.repo.split("/")[1] || S.repo)}</span>`;
+  let acc = "";
+  parts.forEach((p, i) => {
+    acc = acc ? acc + "/" + p : p;
+    const last = i === parts.length - 1;
+    html += `<span class="dim">/</span><span class="crumb${last ? " cur" : ""}"${last ? "" : ` data-dir="${esc(acc)}"`}>${esc(p)}</span>`;
+  });
+  html += '<span class="grow"></span>';
+  return html;
+}
+function bindCrumbs(tb) {
+  tb.querySelectorAll(".crumb[data-dir]").forEach(el => el.onclick = () => {
+    const dir = el.dataset.dir;
+    S.path = null;
+    const tf = $("#tree-filter");
+    if (tf) tf.value = "";
+    expanded.add(dir || "");
+    if (dir) { for (let i = 1; i < dir.split("/").length; i++) expanded.add(dir.split("/").slice(0, i).join("/")); }
+    loadTree("").then(() => renderTree());
+    renderMain();
+    saveHash();
+  });
+}
+async function metaFor(path) {
+  const key = S.ref + "\0" + path;
+  if (metaCache.has(key)) return metaCache.get(key);
+  const m = await api(`/api/${S.repo}/meta?ref=${encodeURIComponent(S.ref)}&path=${encodeURIComponent(path)}`);
+  metaCache.set(key, m);
+  return m;
+}
+function renderCodeHead(b, m) {
+  const el = $("#code-head");
+  if (!el) return;
+  const bits = [];
+  bits.push(`<span class="path">${esc(b.path)}</span>`);
+  if (b.binary) bits.push(`<span class="badge">BIN</span>`);
+  else {
+    bits.push(`<span>${fmtBytes(b.size)}</span>`);
+    bits.push(`<span>${(b.lines || 0).toLocaleString()} lines</span>`);
+  }
+  if (b.truncated) bits.push(`<span class="badge">truncated 1MB</span>`);
+  if (m && m.last) {
+    bits.push(`<span style="flex:1"></span>`);
+    bits.push(`<span class="dim">last:</span> <span class="sha" data-cid="${esc(m.last.id)}" title="${esc(m.last.summary)}">${esc(m.last.short_id)}</span>`);
+    bits.push(`<span title="${esc(m.last.summary)}" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.last.summary)}</span>`);
+    bits.push(`<span class="dim">${esc(m.last.author)} · ${fmtRel(m.last.time)}</span>`);
+  } else if (m) {
+    bits.push(`<span style="flex:1"></span><span class="dim">last commit: not in first ${m.walked}</span>`);
+  }
+  el.innerHTML = bits.join(" ");
+  const sha = el.querySelector(".sha[data-cid]");
+  if (sha) sha.onclick = () => openCommitDiff(sha.dataset.cid);
+}
+function paintCode() {
+  const scroll = $("#code-scroll");
+  if (!scroll || !codeState.lines) return;
+  try {
+    const lines = codeState.lines;
+    const lang = codeState.lang;
+    const stArr = codeState.states;
+    const terms = codeState.terms;
+    scroll.classList.toggle("wrap", !!S.wrap);
+    if (!codeState.vs || codeState.vs.c !== scroll) { if (codeState.vs) codeState.vs.destroy(); codeState.vs = new VScroll(scroll, 20); }
+    const vs = codeState.vs;
+    if (S.wrap) {
+      if (lines.length > 20000) { S.wrap = false; scroll.classList.remove("wrap"); }
+      else {
+        let html = "";
+        for (let i = 0; i < lines.length; i++) {
+          const h = hlLine(lines[i], lang, stArr[i]).html;
+          const cls = codeState.focusLine === i + 1 ? " focusline" : "";
+          const txt = terms.length ? hlTerms(lines[i], terms) : h;
+          html += `<div class="vrow${cls}" style="position:relative"><span class="ln">${i + 1}</span><span class="lc">${terms.length ? txt : h}</span></div>`;
+        }
+        vs.destroy();
+        codeState.vs = null;
+        scroll.innerHTML = html;
+        scroll.style.overflow = "auto";
+        const target = codeState.focusLine ? scroll.querySelector(".focusline") : null;
+        if (target) target.scrollIntoView({ block: "center" });
+        return;
+      }
+    }
+    scroll.style.overflow = "auto";
+    vs.setRows(lines.length, (i) => {
+      const h = hlLine(lines[i], lang, stArr[i]).html;
+      const cls = codeState.focusLine === i + 1 ? " focusline" : "";
+      const body = terms.length ? hlTerms(lines[i], terms) : h;
+      return `<div class="vrow${cls}" style="top:%TOP%px"><span class="ln" data-ln="${i + 1}">${i + 1}</span><span class="lc">${body}</span></div>`;
+    });
+  } catch (e) {
+    console.error("paintCode failed", e);
+    try {
+      scroll.innerHTML = codeState.lines.slice(0, 5000).map((ln, i) => `<div class="vrow" style="position:relative"><span class="ln">${i + 1}</span><span class="lc">${esc(ln)}</span></div>`).join("");
+      scroll.style.overflow = "auto";
+    } catch (_) { /* last resort: leave loading/error UI as-is */ }
+  }
+}
+
+/* ── search tab ────────────────────────────────────────── */
+const searchState = { lastQ: "", results: null, selIdx: 0, tok: 0 };
+let searchBlobTok = 0;
+function renderSearchMain(tb, c, hb) {
+  tb.innerHTML = `<span class="dim">SEARCH</span><span class="grow"></span><span class="dim" id="search-tbinfo"></span>`;
+  c.innerHTML = '<div id="search-detail" style="flex:1;overflow:auto;min-height:0"><div class="empty" style="flex:1">type to search · grep:text · ext:rs · -neg exclude</div></div>';
+  hb.innerHTML = `<span>path words fuzzy · <kbd>grep:</kbd>text content · <kbd>ext:</kbd>rs · <kbd>-neg</kbd> exclude</span>`;
+  if (searchState.results) renderSearchDetail();
+}
+async function doSearch() {
+  const input = $("#search-q");
+  if (!input) return;
+  const q = input.value.trim();
+  searchState.lastQ = q;
+  const info = $("#search-info");
+  const tok = ++searchState.tok;
+  ++searchBlobTok;
+  if (!q) { searchState.results = null; searchState.flat = null; searchState.selIdx = 0; if (info) info.textContent = ""; const el = $("#search-hits"); if (el) el.innerHTML = '<div class="empty" style="padding:10px">type to search</div>'; const d = $("#search-detail"); if (d) d.innerHTML = '<div class="empty" style="flex:1">path words fuzzy · <kbd>grep:</kbd>text · <kbd>ext:</kbd>rs · <kbd>-neg</kbd> exclude</div>'; return; }
+  const ref = $("#search-ref")?.value || S.ref;
+  searchState.ref = ref;
+  try {
+    const r = await api(`/api/${S.repo}/search?ref=${encodeURIComponent(ref)}&q=${encodeURIComponent(q)}`);
+    if (tok !== searchState.tok) return;
+    searchState.results = r;
+    searchState.selIdx = 0;
+    if (info) info.textContent = `${r.files} file hits · ${r.content_files} content files · ${r.matches.length} line matches · ${r.took_ms}ms${r.truncated ? " partial" : ""}`;
+    const tb = $("#search-tbinfo");
+    if (tb) tb.textContent = `${r.files} file hits · ${r.content_files} content files · ${r.matches.length} line matches · ${r.took_ms} ms`;
+    renderSearchHits();
+    renderSearchDetail();
+  } catch (e) { if (tok === searchState.tok && info) info.textContent = String(e); }
+}
+function searchFlat() {
+  const r = searchState.results;
+  if (!r) return [];
+  const hasContent = r.matches.length > 0;
+  const byPath = new Map();
+  for (const m of r.matches) {
+    if (!byPath.has(m.path)) byPath.set(m.path, []);
+    byPath.get(m.path).push(m);
+  }
+  const out = [];
+  if (hasContent) {
+    for (const [path, ms] of byPath) out.push({ path, matches: ms, score: null });
+    // also include pure path hits not already listed
+    for (const h of r.hits) if (!byPath.has(h.path)) out.push({ path: h.path, matches: [], score: h.score });
+  } else {
+    for (const h of r.hits) out.push({ path: h.path, matches: [], score: h.score });
+  }
+  return out;
+}
+function renderSearchHits() {
+  const el = $("#search-hits");
+  if (!el) return;
+  const flat = searchFlat();
+  searchState.flat = flat;
+  const terms = searchTermsFrom(searchState.lastQ);
+  el.innerHTML = flat.map((f, i) => `
+    <div class="hit${i === searchState.selIdx ? " sel" : ""}" data-i="${i}">
+      <div class="hpath">${esc(f.path)}</div>
+      <div class="hmeta">${f.matches.length ? f.matches.length + " match lines" : f.score != null ? "score " + f.score : ""}</div>
+      ${f.matches.slice(0, 3).map(m => `<div class="hline" data-line="${m.line}"><span class="hno">${m.line}</span>${hlTerms(m.text, terms)}</div>`).join("")}
+    </div>`).join("") || '<div class="empty">no results</div>';
+  el.querySelectorAll(".hit").forEach(h => h.onclick = (e) => {
+    const line = e.target.closest(".hline")?.dataset.line;
+    selectSearchHit(+h.dataset.i, line ? +line : undefined);
+  });
+}
+function searchTermsFrom(q) {
+  return q.split(/\s+/).filter(t => t && !t.startsWith("-") && !/^(ext|grep|content):/i.test(t)).map(t => t.toLowerCase());
+}
+function selectSearchHit(i, focusLine) {
+  searchState.selIdx = i;
+  searchState.focusLine = focusLine || 0;
+  $$("#search-hits .hit").forEach((h, k) => h.classList.toggle("sel", k === i));
+  renderSearchDetail();
+}
+function renderSearchDetail() {
+  const el = $("#search-detail");
+  if (!el) return;
+  const flat = searchState.flat || searchFlat();
+  const f = flat[searchState.selIdx];
+  if (!f) { el.innerHTML = '<div class="empty">select a result</div>'; return; }
+  const terms = searchTermsFrom(searchState.lastQ);
+  const contentTerms = (searchState.lastQ.split(/\s+/).filter(t => /^(grep|content):/i.test(t)).map(t => t.slice(t.indexOf(":") + 1).toLowerCase())).filter(Boolean);
+  const tok = ++searchBlobTok;
+  el.innerHTML = `<div class="code-head"><span class="path">${esc(f.path)}</span><span class="grow"></span><span class="dim" id="match-pos"></span></div><div class="vscroll" id="search-code"></div>`;
+  const sRef = searchState.ref || S.ref;
+  const key = sRef + "\0" + f.path;
+  const show = (b) => {
+    if (tok !== searchBlobTok) return;
+    if (b.binary) { $("#search-code").innerHTML = '<div class="binbox">binary file</div>'; return; }
+    const lines = b.text.split("\n");
+    const lang = langOf(f.path);
+    const states = hlStates(lines, lang);
+    // build hunked view when there are match lines: show matches with context
+    if (f.matches.length) {
+      const keep = new Set();
+      for (const m of f.matches) for (let d = -2; d <= 2; d++) if (m.line - 1 + d >= 0 && m.line - 1 + d < lines.length) keep.add(m.line - 1 + d);
+      const idxs = [...keep].sort((a, b) => a - b);
+      // group with gaps
+      const groups = [];
+      for (const i of idxs) {
+        const g = groups[groups.length - 1];
+        if (g && i <= g[1] + 1) g[1] = i; else groups.push([i, i]);
+      }
+      const vs = new VScroll($("#search-code"), 20);
+      searchState.vs = vs;
+      // flatten rows: line indices + separator markers
+      const rows = [];
+      for (let gi = 0; gi < groups.length; gi++) {
+        if (gi) rows.push(-1);
+        for (let i = groups[gi][0]; i <= groups[gi][1]; i++) rows.push(i);
+      }
+      const rowH = 20, gapH = 22;
+      const tops = new Int32Array(rows.length + 1);
+      for (let k = 0; k < rows.length; k++) tops[k + 1] = tops[k] + (rows[k] === -1 ? gapH : rowH);
+      const matchLines = new Set(f.matches.map(m => m.line - 1));
+      vs.setRows(rows.length, (k) => {
+        const i = rows[k];
+        if (i === -1) return `<div class="vrow gaprow" style="top:%TOP%px;height:${gapH}px;line-height:${gapH}px"><span class="ln">⋯</span><span class="lc">context skipped</span></div>`;
+        const body = hlTerms(lines[i], contentTerms.length ? contentTerms : terms);
+        const cls = matchLines.has(i) ? " focusline" : "";
+        return `<div class="vrow${cls}" style="top:%TOP%px"><span class="ln">${i + 1}</span><span class="lc">${body}</span></div>`;
+      }, tops);
+      // scroll to the clicked line if provided, else first match
+      const targetLine = (searchState.focusLine || f.matches[0].line) - 1;
+      const ri = rows.indexOf(targetLine);
+      if (ri >= 0) vs.scrollToRow(ri, true);
+      let mi = 0;
+      const pos = $("#match-pos");
+      if (pos) {
+        pos.textContent = `match ${mi + 1}/${f.matches.length}`;
+        pos.style.cursor = "pointer";
+        pos.onclick = () => { mi = (mi + 1) % f.matches.length; const ri2 = rows.indexOf(f.matches[mi].line - 1); if (ri2 >= 0) vs.scrollToRow(ri2, true); pos.textContent = `match ${mi + 1}/${f.matches.length}`; };
+      }
+    } else {
+      const vs = new VScroll($("#search-code"), 20);
+      searchState.vs = vs;
+      vs.setRows(lines.length, (i) => `<div class="vrow" style="top:%TOP%px"><span class="ln">${i + 1}</span><span class="lc">${hlLine(lines[i], lang, states[i]).html}</span></div>`);
+    }
+  };
+  const b = blobCache.get(key);
+  if (b) show(b);
+  else api(`/api/${S.repo}/blob?ref=${encodeURIComponent(sRef)}&path=${encodeURIComponent(f.path)}`).then(bb => { blobCache.set(key, bb); show(bb); }).catch(e => { if (tok === searchBlobTok) { const sc = $("#search-code"); if (sc) sc.innerHTML = `<div class="empty">${esc(String(e))}</div>`; } });
+}
+
+/* ── commits tab ───────────────────────────────────────── */
+const commitsState = { page: 1, total: null, loaded: 0, tok: 0, selIdx: 0, limit: 50 };
+function renderCommitsMain(tb, c, hb) {
+  const refVal = $("#commits-ref")?.value || S.ref;
+  tb.innerHTML = `<span class="dim">COMMITS</span><span class="mono dim">@ <span id="commits-toolbar-ref">${esc(refVal)}</span></span><span class="grow"></span><span class="dim" id="commits-tbinfo"></span>`;
+  c.innerHTML = '<div id="commits-main" style="flex:1;overflow:auto;min-height:0"><div class="empty" style="flex:1">loading…</div></div>';
+  hb.innerHTML = `<span>click a commit → compare parent…commit</span>`;
+  if (commitsState.last) paintCommits(commitsState.last);
+}
+async function loadCommits() {
+  const ref = $("#commits-ref")?.value || S.ref;
+  const limit = commitsState.limit = +($("#commits-size")?.value || commitsState.limit || 50);
+  const page = commitsState.page;
+  const tok = ++commitsState.tok;
+  const q = `limit=${limit}&page=${page}&ref=${encodeURIComponent(ref)}`;
+  const info = $("#commits-info");
+  if (info) info.textContent = `page ${page}…`;
+  try {
+    const { commits } = await api(`/api/${S.repo}/commits?${q}`);
+    if (tok !== commitsState.tok) return;
+    commitsState.loaded = commits.length;
+    commitsState.last = commits;
+    commitsState.selIdx = 0;
+    paintCommits(commits);
+    renderCommitsInfo(limit);
+    // stats pass
+    api(`/api/${S.repo}/commits?${q}&stats=1`).then(({ commits: ws }) => {
+      if (tok !== commitsState.tok) return;
+      commitsState.stats = new Map(ws.map(c => [c.id, c]));
+      paintCommits(commits);
+    }).catch(() => {});
+    if (commitsState.total == null) {
+      api(`/api/${S.repo}/commits?ref=${encodeURIComponent(ref)}&count=1`).then(r => {
+        if (tok !== commitsState.tok) return;
+        commitsState.total = r.count;
+        renderCommitsInfo(limit);
+      }).catch(() => {});
+    }
+  } catch (e) {
+    if (tok === commitsState.tok) {
+      if (info) info.textContent = String(e);
+      const el = $("#commits-main");
+      if (el) el.innerHTML = `<div class="empty">${esc(String(e))}</div>`;
+    }
+  }
+}
+function renderCommitsInfo(limit) {
+  const info = $("#commits-info");
+  if (!info) return;
+  const pages = commitsState.total == null ? 0 : Math.max(1, Math.ceil(commitsState.total / limit));
+  info.textContent = pages ? `${commitsState.total.toLocaleString()} commits · p${commitsState.page}/${pages}` : `p${commitsState.page} · ${commitsState.loaded}`;
+  const prev = $("#commits-prev"), next = $("#commits-next");
+  if (prev) prev.disabled = commitsState.page <= 1;
+  if (next) next.disabled = pages ? commitsState.page >= pages : commitsState.loaded < limit;
+}
+function paintCommits(commits) {
+  const el = $("#commits-main");
+  if (!el) return;
+  const side = $("#commits-side");
+  // activity strip + top authors in sidebar
+  if (side && commits.length) {
+    const byDay = new Map();
+    for (const c of commits) { const k = Math.floor(c.time / 86400); byDay.set(k, (byDay.get(k) || 0) + 1); }
+    const ks = [...byDay.keys()].sort((a, b) => a - b);
+    const hi = ks[ks.length - 1], span = Math.min(hi - ks[0] + 1, 40), mx = Math.max(...byDay.values());
+    let strip = "";
+    for (let k = hi - span + 1; k <= hi; k++) { const v = byDay.get(k) || 0; strip += v ? SPARK_CH[Math.min(7, Math.floor(v / mx * 7.999))] : "·"; }
+    const authors = new Map();
+    for (const c of commits) authors.set(c.author, (authors.get(c.author) || 0) + 1);
+    const top = [...authors].sort((a, b) => b[1] - a[1]).slice(0, 6);
+    side.innerHTML = `
+      <div style="padding:8px 10px;border-bottom:1px solid var(--bd);font-family:var(--mono);letter-spacing:1px">${strip}</div>
+      <div style="padding:6px 10px;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--fg2)">Top authors</div>
+      ${top.map(([n, v], i) => `<div style="display:flex;gap:8px;padding:3px 10px;font-size:11px;${i ? "opacity:0.75" : ""}">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span>
+        <span class="mono dim num">${v}</span></div>`).join("")}`;
+  } else if (side) side.innerHTML = "";
+  const stats = commitsState.stats;
+  el.innerHTML = commits.map(c => {
+    const st = stats?.get(c.id);
+    const statHtml = st ? `<span class="stat"><span class="dim">${st.files_changed} files</span> <span class="a">+${st.additions}</span> <span class="d">−${st.deletions}</span></span>` : `<span class="stat dim">…</span>`;
+    return `<div class="lrow" data-cid="${esc(c.id)}" style="height:34px">
+      <span class="sha mono">${esc(c.short_id)}</span>
+      <span class="grow" title="${esc(c.summary)}">${esc(c.summary)}</span>
+      ${statHtml}
+      <span class="who">${esc(c.author)}</span>
+      <span class="when num">${fmtRel(c.time)}</span>
+    </div>`;
+  }).join("") || '<div class="empty">no commits</div>';
+  el.onclick = (e) => {
+    const r = e.target.closest(".lrow[data-cid]");
+    if (r) openCommitDiff(r.dataset.cid);
+  };
+  const tb = $("#commits-tbinfo");
+  if (tb) tb.textContent = `${commits.length} shown`;
+}
+function openCommitDiff(cid) {
+  S.base = cid + "^";
+  S.head = cid;
+  setTab("compare");
+}
+
+/* ── compare tab ───────────────────────────────────────── */
+const diffState = { summary: null, files: null, sel: -1, tok: 0, find: { matches: [], idx: -1, q: "" }, info: "" };
+function renderCompareMain(tb, c, hb) {
+  tb.innerHTML = `
+    <span class="mono">${esc(S.base || "?")}</span><span class="dim">…</span><span class="mono">${esc(S.head || "?")}</span>
+    <span class="grow"></span>
+    <input id="diff-find" type="search" placeholder="find in diff  (Ctrl+F)" style="width:160px">
+    <button id="diff-expand">EXPAND</button><button id="diff-collapse">CLEAR</button>
+    <span class="dim num" id="diff-tbinfo">${esc(diffState.info)}</span>`;
+  $("#diff-find").addEventListener("input", debounce(() => diffFind($("#diff-find").value.trim()), 180));
+  $("#diff-find").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); diffFindJump(e.shiftKey ? -1 : 1); }
+    if (e.key === "Escape") { e.target.value = ""; diffFind(""); }
+  });
+  $("#diff-expand").onclick = async () => {
+    const side = $("#diff-side");
+    if (!side) return;
+    const hs = [...side.querySelectorAll(".lrow[data-i]")];
+    const expandTok = ++diffState.tok; // own token: don't get killed by per-file loads
+    renderCompareMain._tok = expandTok;
+    // parallel with small concurrency; suppress per-file sidebar/detail rebuilds
+    const CONC = 4;
+    let idx = 0;
+    const worker = async () => {
+      while (idx < hs.length) {
+        if (diffState.tok !== expandTok) return;
+        const i = idx++;
+        await showDiffFile(+hs[i].dataset.i, true, expandTok, /*quiet*/ true);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONC, hs.length) }, worker));
+    if (diffState.tok === expandTok) {
+      renderDiffSide();
+      if (diffState.sel >= 0) showDiffFile(diffState.sel, true, expandTok);
+      else renderDiffDetail();
+    }
+  };
+  $("#diff-collapse").onclick = () => { diffState.sel = -1; renderDiffDetail(); renderDiffSide(); };
+  c.innerHTML = '<div id="diff-detail" style="flex:1;overflow:auto;min-height:0;display:flex;flex-direction:column"></div>';
+  hb.innerHTML = `<span><kbd>j</kbd>/<kbd>k</kbd> files · <kbd>Enter</kbd> open · <kbd>Ctrl+F</kbd> find</span>`;
+  renderCompareMain._tok = ++diffState.tok;
+  if (diffState.summary && diffState.summary.base === S.base && diffState.summary.head === S.head) {
+    renderDiffSide(); renderDiffDetail();
+  } else if (S.base && S.head) runDiff();
+  else { $("#diff-detail").innerHTML = '<div class="empty">pick base…head above, press <b>DIFF</b></div>'; renderDiffSide(); }
+}
+async function runDiff() {
+  const base = S.base || $("#base-ref")?.value;
+  const head = S.head || $("#head-ref")?.value;
+  S.base = base; S.head = head;
+  saveHash();
+  diffState.rows = null;
+  diffState.find = { matches: [], idx: -1, q: "" };
+  const info = $("#diff-tbinfo");
+  if (info) info.textContent = "computing…";
+  const tok = ++diffState.tok;
+  renderCompareMain._tok = tok;
+  try {
+    const s = await api(`/api/${S.repo}/diff?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
+    if (tok !== diffState.tok) return;
+    diffState.summary = s;
+    diffState.files = s.files;
+    diffState.sel = s.files.length ? 0 : -1;
+    diffState.info = `${s.files.length} files  +${s.total_additions} −${s.total_deletions}`;
+    if (info) info.textContent = diffState.info;
+    $("#diff-filter") && ($("#diff-filter").value = "");
+    renderDiffSide();
+    if (diffState.sel >= 0) showDiffFile(diffState.sel, true);
+    else if (!s.files.length) {
+      const d = $("#diff-detail");
+      if (d) d.innerHTML = `<div class="empty">no changes <b>${esc(base)}</b> → <b>${esc(head)}</b></div>`;
+    } else renderDiffDetail();
+  } catch (e) {
+    if (tok === diffState.tok) {
+      diffState.summary = null;
+      diffState.files = null;
+      diffState.sel = -1;
+      diffState.info = "";
+      renderDiffSide();
+      if (info) info.textContent = "";
+      toast("diff failed: " + e.message);
+      const d = $("#diff-detail");
+      if (d) d.innerHTML = `<div class="empty">${esc(String(e))}<br><br>root commits have no parent — try another base.</div>`;
+    }
+  }
+}
+function renderDiffSide() {
+  const el = $("#diff-side");
+  if (!el) return;
+  const files = diffState.files || [];
+  const filter = ($("#diff-filter")?.value || "").trim().toLowerCase();
+  const shown = filter ? files.filter(f => f.path.toLowerCase().includes(filter) || (f.old_path || "").toLowerCase().includes(filter)) : files;
+  if (!files.length) { el.innerHTML = `<div class="empty">${diffState.summary ? `no changes ${esc(diffState.summary.base)} → ${esc(diffState.summary.head)}` : "no diff loaded"}</div>`; return; }
+  el.innerHTML = `<div style="padding:5px 10px;border-bottom:1px solid var(--bd);color:var(--fg2);font-size:11px" class="num">${filter ? shown.length + " / " + files.length : files.length} files · <span class="a">+${diffState.summary.total_additions}</span> <span class="d">−${diffState.summary.total_deletions}</span></div>` +
+    shown.map(f => {
+      const i = files.indexOf(f);
+      return `<div class="lrow${i === diffState.sel ? " sel" : ""}" data-i="${i}" style="height:28px">
+        <span class="badge ${f.status}">${f.status}</span>
+        <span class="grow mono" style="font-size:11px" title="${esc(f.path)}">${esc(f.path)}</span>
+        ${f.binary ? '<span class="dim num">bin</span>' : `<span class="stat num"><span class="a">+${f.additions}</span> <span class="d">−${f.deletions}</span></span>`}
+      </div>`;
+    }).join("");
+  el.onclick = (e) => {
+    const r = e.target.closest(".lrow[data-i]");
+    if (!r) return;
+    diffState.sel = +r.dataset.i;
+    renderDiffSide();
+    showDiffFile(diffState.sel, true);
+  };
+}
+function renderDiffDetail(msg) {
+  const el = $("#diff-detail");
+  if (!el) return;
+  clearDiffVS();
+  el.innerHTML = msg != null ? msg : '<div class="empty">select a file</div>';
+}
+function clearDiffVS() { if (diffVSObj) { diffVSObj.destroy(); diffVSObj = null; } }
+async function showDiffFile(index, replace, tokOverride, quiet) {
+  const file = (diffState.files || [])[index];
+  if (!file) return;
+  if (quiet) {
+    // fetch-only: warm the server resp-cache, skip all DOM work;
+    // caller renders once at the end of EXPAND
+    try {
+      let u = `/api/${S.repo}/file?base=${encodeURIComponent(diffState.summary.base)}&head=${encodeURIComponent(diffState.summary.head)}&path=${encodeURIComponent(file.path)}`;
+      if (file.old_path && file.old_path !== file.path) u += `&old_path=${encodeURIComponent(file.old_path)}`;
+      await api(u);
+    } catch { /* skip failed file */ }
+    return;
+  }
+  diffState.sel = index;
+  diffState.rows = null; // invalidate find against previous file
+  renderDiffSide();
+  const el = $("#diff-detail");
+  if (!el) return;
+  clearDiffVS();
+  const tok = tokOverride !== undefined ? tokOverride : ++diffState.tok;
+  let u = `/api/${S.repo}/file?base=${encodeURIComponent(diffState.summary.base)}&head=${encodeURIComponent(diffState.summary.head)}&path=${encodeURIComponent(file.path)}`;
+  if (file.old_path && file.old_path !== file.path) u += `&old_path=${encodeURIComponent(file.old_path)}`;
+  el.innerHTML = `<div class="code-head"><span class="badge ${file.status}">${file.status}</span><span class="path">${esc(file.path)}</span>${file.old_path && file.old_path !== file.path ? `<span class="dim">renamed from</span><span class="mono">${esc(file.old_path)}</span>` : ""}<span class="grow"></span><span class="num"><span class="a">+${file.additions}</span> <span class="d">−${file.deletions}</span></span></div><div class="vscroll" id="diff-scroll"></div><div class="code-head" style="border-top:1px solid var(--bd);border-bottom:none" id="diff-foot"></div>`;
+  try {
+    const fd = await api(u);
+    if (tok !== diffState.tok) return;
+    $("#diff-foot").innerHTML = fd.too_large ? "too large" : fd.binary ? "binary file" : `${fd.hunks.length} hunks · ${fd.hunks.reduce((s, h) => s + h.lines.length, 0)} changed lines`;
+    if (fd.binary) { $("#diff-scroll").innerHTML = '<div class="binbox">binary — no textual diff</div>'; return; }
+    if (fd.too_large) { $("#diff-scroll").innerHTML = '<div class="binbox">file too large to diff (>1 MiB)</div>'; return; }
+    if (!fd.hunks.length) { $("#diff-scroll").innerHTML = '<div class="binbox">no textual changes</div>'; return; }
+    // build rows
+    const rows = [];
+    let prev = null;
+    for (const h of fd.hunks) {
+      const gapOld = prev ? h.old_start - (prev.old_start + prev.old_count) : (h.old_count ? h.old_start - 1 : h.old_start);
+      const gapNew = prev ? h.new_start - (prev.new_start + prev.new_count) : (h.new_count ? h.new_start - 1 : h.new_start);
+      const gap = Math.max(gapOld, gapNew, 0);
+      if (gap > 0) rows.push(["g", `⋯ ${gap} lines unchanged`]);
+      rows.push(["h", `@@ -${h.old_start},${h.old_count} +${h.new_start},${h.new_count} @@`]);
+      let o = h.old_start, n = h.new_start;
+      for (const l of h.lines) {
+        let oc = "", nc = "";
+        if (l.kind === "add") nc = n++;
+        else if (l.kind === "del") oc = o++;
+        else { oc = o++; nc = n++; }
+        rows.push([l.kind === "add" ? "add" : l.kind === "del" ? "del" : "ctx", oc, nc, l.text]);
+      }
+      prev = h;
+    }
+    const lang = langOf(file.path);
+    const LH = 20, HH = 26, GH = 24;
+    const tops = new Int32Array(rows.length + 1);
+    for (let k = 0; k < rows.length; k++) tops[k + 1] = tops[k] + (rows[k][0] === "h" ? HH : rows[k][0] === "g" ? GH : LH);
+    diffState.rows = rows;
+    const vs = new VScroll($("#diff-scroll"), LH);
+    diffVSObj = vs;
+    vs.setRows(rows.length, (k) => {
+      const r = rows[k];
+      if (r[0] === "h") return `<div class="vrow hunkrow" style="top:%TOP%px;height:${HH}px;line-height:${HH - 4}px"><span class="ln"></span><span class="lc">${esc(r[1])}</span></div>`;
+      if (r[0] === "g") return `<div class="vrow gaprow" style="top:%TOP%px;height:${GH}px;line-height:${GH}px"><span class="ln"></span><span class="lc">${esc(r[1])}</span></div>`;
+      const cls = r[0] === "add" ? " add" : r[0] === "del" ? " del" : "";
+      const body = hlLine(r[3], lang, 0).html;
+      return `<div class="vrow${cls}" style="top:%TOP%px"><span class="ln">${r[1]}</span><span class="ln" style="border-right:1px solid var(--bd);left:56px">${r[2]}</span><span class="lc" style="padding-left:12px">${body}</span></div>`;
+    }, tops);
+  } catch (e) {
+    if (tok === diffState.tok) $("#diff-scroll") && ($("#diff-scroll").innerHTML = `<div class="empty">${esc(String(e))}</div>`);
+  }
+}
+function diffFind(q) {
+  diffState.find.q = asciiLower(q);
+  diffState.find.matches = [];
+  diffState.find.idx = -1;
+  if (!diffState.find.q || !diffState.rows) { $("#diff-tbinfo") && ($("#diff-tbinfo").textContent = diffState.info); return; }
+  for (let ri = 0; ri < diffState.rows.length; ri++) {
+    const r = diffState.rows[ri];
+    if ((r[0] === "add" || r[0] === "del" || r[0] === "ctx") && asciiLower(String(r[3])).includes(diffState.find.q)) diffState.find.matches.push(ri);
+  }
+  if (diffState.find.matches.length) { diffState.find.idx = 0; diffFindJump(0); }
+  else $("#diff-tbinfo") && ($("#diff-tbinfo").textContent = "no matches");
+}
+function diffFindJump(dir) {
+  const f = diffState.find;
+  if (!f.matches.length) return;
+  if (dir !== 0) f.idx = (f.idx + dir + f.matches.length) % f.matches.length;
+  const ri = f.matches[f.idx];
+  if (diffVSObj) diffVSObj.scrollToRow(ri, true);
+  $("#diff-tbinfo") && ($("#diff-tbinfo").textContent = `match ${f.idx + 1}/${f.matches.length}`);
+}
+
+/* ── pulls tab ─────────────────────────────────────────── */
+async function loadPullsSide() {
+  const el = $("#pulls-side");
+  try {
+    const { pulls } = await api(`/api/${S.repo}/pulls`);
+    el.innerHTML = pulls.map(p => `
+      <div class="lrow" style="height:auto;padding:8px 10px;align-items:flex-start;flex-direction:column;gap:3px;cursor:default">
+        <div style="display:flex;gap:8px;width:100%;align-items:center">
+          <span class="badge">#${p.number}</span>
+          <span class="grow" style="font-weight:600">${esc(p.title)}</span>
+        </div>
+        <div class="dim" style="font-size:11px">${esc(p.base_ref)} ← ${esc(p.head_ref)} · @${esc(p.user)} · ${esc(p.state)} · ${fmtRel(Math.floor(new Date(p.updated_at).getTime() / 1000))}</div>
+      </div>`).join("") || '<div class="empty">no open pull requests</div>';
+  } catch (e) { el.innerHTML = `<div class="empty">PR load failed<br><span class="dim">${esc(String(e))}</span><br><span class="dim">set GITHUB_TOKEN if rate-limited</span></div>`; }
+}
+function renderPullsMain(tb, c, hb) {
+  tb.innerHTML = `<span class="dim">PULL REQUESTS</span><span class="grow"></span><span class="dim">open PRs from GitHub API</span>`;
+  c.innerHTML = '<div class="empty" style="padding-top:80px">Pull requests are listed in the sidebar.<br><span class="dim">requires network + optional GITHUB_TOKEN</span></div>';
+  hb.innerHTML = "";
+}
+
+/* ═══════════════ palette (Ctrl+P) ═══════════════ */
+const pal = { open: false, items: [], sel: 0, tok: 0, all: null, lc: null, rendered: "" };
+async function openPalette() {
+  if (!S.repo) return;
+  pal.open = true;
+  $("#palette-ov").classList.add("open");
+  document.getElementById("app").inert = true; // trap focus behind the overlay
+  const inp = $("#palette-input");
+  inp.value = "";
+  inp.focus();
+  pal.items = [];
+  pal.sel = 0;
+  renderPalette("");
+  const tok = ++pal.tok;
+  try {
+    const files = await getFiles();
+    if (tok !== pal.tok) return;
+    pal.all = files;
+    pal.lc = files.map(asciiLower); // precompute once per open
+    renderPalette(inp.value);
+  } catch (e) { $("#palette-list").innerHTML = `<div class="empty">${esc(String(e))}</div>`; }
+}
+function closePalette() {
+  pal.open = false;
+  $("#palette-ov").classList.remove("open");
+  document.getElementById("app").inert = false;
+}
+function renderPalette(q, skipFilter) {
+  const list = $("#palette-list");
+  if (!pal.all) { list.innerHTML = '<div class="empty">loading file list…</div>'; return; }
+  if (!skipFilter) {
+    const items = q ? fuzzyFilter(pal.all, q, 100, pal.lc) : pal.all.slice(0, 100);
+    pal.items = items;
+    pal.rendered = items.map((p, i) => {
+      const name = p.split("/").pop();
+      const dir = p.slice(0, p.length - name.length - 1);
+      return `<div class="prow" data-i="${i}"><span class="pd">${esc(dir)}${dir ? "/" : ""}</span><span class="pf">${esc(name)}</span></div>`;
+    }).join("") || '<div class="empty">no matches</div>';
+    list.innerHTML = pal.rendered;
+    // one delegated handler instead of per-row
+    list.onclick = (e) => {
+      const row = e.target.closest(".prow");
+      if (!row) return;
+      const p = pal.items[+row.dataset.i];
+      if (p) { closePalette(); openFile(p); }
+    };
+  }
+  if (pal.sel >= pal.items.length) pal.sel = 0;
+  // toggle .sel classes only — no re-filter, no innerHTML rebuild on nav
+  list.querySelectorAll(".prow").forEach((x, k) => x.classList.toggle("sel", k === pal.sel));
+}
+let palDebounce = 0;
+$("#palette-input").addEventListener("input", (e) => {
+  pal.sel = 0;
+  clearTimeout(palDebounce);
+  palDebounce = setTimeout(() => renderPalette(e.target.value.trim()), 40);
+});
+$("#palette-input").addEventListener("keydown", (e) => {
+  e.stopPropagation(); // keep global handlers (Ctrl+P toggle) from stealing nav keys
+  if (e.key === "Escape") { closePalette(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") { e.preventDefault(); closePalette(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") { e.preventDefault(); return; } // don't leak to browser find
+  if (e.key === "Tab") { e.preventDefault(); return; } // trap: arrow keys navigate, no tab escape
+  if (e.key === "ArrowDown" || (e.ctrlKey && e.key === "n")) { e.preventDefault(); pal.sel = Math.min(pal.sel + 1, pal.items.length - 1); renderPalette("", true); scrollPal(); }
+  if (e.key === "ArrowUp" || (e.ctrlKey && e.key === "p")) { e.preventDefault(); pal.sel = Math.max(pal.sel - 1, 0); renderPalette("", true); scrollPal(); }
+  if (e.key === "Enter") { const p = pal.items[pal.sel]; if (p) { closePalette(); openFile(p); } }
+});
+function scrollPal() { const el = $(`#palette-list .prow.sel`); if (el) el.scrollIntoView({ block: "nearest" }); }
+$("#palette-ov").addEventListener("mousedown", (e) => { if (e.target === $("#palette-ov")) closePalette(); });
+$("#btn-palette").onclick = openPalette;
+
+/* ═══════════════ keyboard ═══════════════ */
+addEventListener("keydown", (e) => {
+  const inInput = e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA";
+  if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P")) { e.preventDefault(); if (pal.open) closePalette(); else openPalette(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+    if (S.tab === "compare" && $("#diff-find")) { e.preventDefault(); $("#diff-find").focus(); $("#diff-find").select(); return; }
+    if (S.tab === "search" && $("#search-q")) { e.preventDefault(); $("#search-q").focus(); $("#search-q").select(); return; }
+    e.preventDefault(); // block native browser find — useless against virtualized lists
+    return;
+  }
+  if (e.key === "Escape") {
+    if (pal.open) { closePalette(); return; }
+    if (inInput) { e.target.blur(); return; }
+  }
+  if (inInput || pal.open) return;
+  if (e.key === "/") {
+    e.preventDefault();
+    if (S.tab === "files" && $("#tree-filter")) { $("#tree-filter").focus(); $("#tree-filter").select(); }
+    else if (S.tab === "search" && $("#search-q")) { $("#search-q").focus(); $("#search-q").select(); }
+    else if (S.tab === "compare" && $("#diff-filter")) { $("#diff-filter").focus(); $("#diff-filter").select(); }
+    return;
+  }
+  const tabMap = { "1": "files", "2": "search", "3": "commits", "4": "compare", "5": "pulls" };
+  if (tabMap[e.key] && !e.ctrlKey && !e.metaKey && !e.altKey) { setTab(tabMap[e.key]); return; }
+  if ((e.key === "j" || e.key === "k") && S.tab === "compare") {
+    const side = $("#diff-side");
+    const rows = side ? [...side.querySelectorAll(".lrow[data-i]")] : [];
+    if (!rows.length) return;
+    e.preventDefault();
+    let idx = rows.findIndex(r => +r.dataset.i === diffState.sel);
+    idx = e.key === "j" ? Math.min(idx + 1, rows.length - 1) : Math.max(idx - 1, 0);
+    diffState.sel = +rows[idx].dataset.i;
+    renderDiffSide();
+    showDiffFile(diffState.sel, true);
+    $(`#diff-side .lrow[data-i="${diffState.sel}"]`)?.scrollIntoView({ block: "nearest" });
+  }
+  if ((e.key === "j" || e.key === "k") && S.tab === "search" && searchState.flat?.length) {
+    e.preventDefault();
+    let i = searchState.selIdx + (e.key === "j" ? 1 : -1);
+    i = Math.max(0, Math.min(i, searchState.flat.length - 1));
+    selectSearchHit(i);
+    const el = $(`#search-hits .hit[data-i="${i}"]`);
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }
+  if ((e.key === "j" || e.key === "k") && S.tab === "commits") {
+    const rows = [...document.querySelectorAll("#commits-main .lrow[data-cid]")];
+    if (!rows.length) return;
+    e.preventDefault();
+    if (commitsState.selIdx == null) commitsState.selIdx = 0;
+    commitsState.selIdx = Math.max(0, Math.min(commitsState.selIdx + (e.key === "j" ? 1 : -1), rows.length - 1));
+    rows.forEach((r, i) => r.classList.toggle("sel", i === commitsState.selIdx));
+    rows[commitsState.selIdx]?.scrollIntoView({ block: "nearest" });
+  }
+});
+
+/* ═══════════════ sidebar resize ═══════════════ */
+(() => {
+  const rz = $("#side-resizer");
+  let dragging = false;
+  rz.addEventListener("mousedown", (e) => { dragging = true; rz.classList.add("drag"); e.preventDefault(); });
+  addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    const w = Math.max(180, Math.min(560, e.clientX - 44));
+    document.documentElement.style.setProperty("--sbw", w + "px");
+  });
+  addEventListener("mouseup", () => { if (dragging) { dragging = false; rz.classList.remove("drag"); } });
+})();
+
+/* ═══════════════ boot ═══════════════ */
+refreshStats();
+refreshRepos().catch(e => toast(String(e)));
 </script>
 </body>
 </html>

@@ -64,6 +64,8 @@ pub struct BlobResp {
     pub binary: bool,
     pub truncated: bool,
     pub text: String,
+    pub size: u64,
+    pub lines: u64,
 }
 
 /// one bit per byte folded into 0..63 — a missing bit proves a term can't
@@ -259,7 +261,7 @@ fn index_of(mirror: &Path, repo: &gix::Repository, commit: gix::ObjectId) -> Res
             }
             if mode.is_tree() {
                 stack.push((entry.object()?.try_into_tree()?, path.clone(), mask));
-            } else if mode.is_blob() {
+            } else if mode.is_blob_or_symlink() {
                 ents.push(Ent {
                     path: path.clone(),
                     blob: entry.object_id(),
@@ -284,6 +286,21 @@ fn index_of(mirror: &Path, repo: &gix::Repository, commit: gix::ObjectId) -> Res
 /// prewarm so the first search skips the tree walk.
 pub fn prewarm_index(mirror: &Path, repo: &gix::Repository, commit: gix::ObjectId) {
     let _ = index_of(mirror, repo, commit);
+}
+
+/// Every blob path at `ref`, sorted — one tree walk via the search index
+/// (cached per commit), reused by the tree browser's quick-open palette.
+pub fn all_paths(mirror: &PathBuf, refspec: &str) -> Result<Vec<String>> {
+    let tsr = crate::repo::get(mirror)?;
+    let repo = crate::repo::handle(&tsr);
+    let commit = crate::diff::commit_of(&repo, refspec)?.id().detach();
+    let ix = index_of(mirror, &repo, commit)?;
+    Ok(ix
+        .ents
+        .iter()
+        // skip non-UTF-8 paths (can't round-trip through query strings)
+        .filter_map(|e| std::str::from_utf8(&e.path).ok().map(|s| s.to_string()))
+        .collect())
 }
 
 pub fn search(mirror: &PathBuf, refspec: &str, q: &str) -> Result<SearchResp> {
@@ -328,7 +345,11 @@ pub fn search(mirror: &PathBuf, refspec: &str, q: &str) -> Result<SearchResp> {
                 continue;
             }
             hits.push((sc, e));
+        } else if !p.exts.is_empty() || !p.neg_terms.is_empty() {
+            // filter-only query (ext: / -negate): every survivor is a file hit
+            hits.push((0, e));
         }
+        // grep-only or empty query: no file hits (matches carry the results)
         cand.push(e);
     }
 
@@ -336,15 +357,8 @@ pub fn search(mirror: &PathBuf, refspec: &str, q: &str) -> Result<SearchResp> {
         b.0.cmp(&a.0)
             .then_with(|| a.1.path.len().cmp(&b.1.path.len()))
     });
-    let files_total = hits.len();
-    let files: Vec<FileHit> = hits
-        .into_iter()
-        .take(MAX_FILES_OUT)
-        .map(|(score, e)| FileHit {
-            path: String::from_utf8_lossy(&e.path).into_owned(),
-            score,
-        })
-        .collect();
+    // file-hit paths collected from neg-grep-only survivors (merged below)
+    let mut neg_survivors: Vec<String> = Vec::new();
 
     let mut matches = Vec::new();
     let mut truncated = false;
@@ -371,6 +385,9 @@ pub fn search(mirror: &PathBuf, refspec: &str, q: &str) -> Result<SearchResp> {
                 let mut out: Vec<LineHit> = Vec::new();
                 let mut local_truncated = false;
                 let mut matched = 0usize;
+                // neg-grep-only queries: survivors are the file hits
+                let mut survivors: Vec<String> = Vec::new();
+                let neg_only = greps.is_empty() && !neg_greps.is_empty();
                 for (path, blob_id) in cand_chunk {
                     if deadline_hit.load(std::sync::atomic::Ordering::Relaxed) {
                         local_truncated = true;
@@ -392,6 +409,10 @@ pub fn search(mirror: &PathBuf, refspec: &str, q: &str) -> Result<SearchResp> {
                         continue;
                     }
                     if !greps.iter().all(|g| contains_ci(data, g)) {
+                        continue;
+                    }
+                    if neg_only {
+                        survivors.push(String::from_utf8_lossy(&path).into_owned());
                         continue;
                     }
                     let mut per = 0usize;
@@ -429,23 +450,46 @@ pub fn search(mirror: &PathBuf, refspec: &str, q: &str) -> Result<SearchResp> {
                         matched += 1;
                     }
                 }
-                (out, local_truncated, matched)
+                (out, local_truncated, matched, survivors)
             }));
         }
 
+        let mut neg_survivors_local: Vec<String> = Vec::new();
         for h in handles {
-            let (part, t, m) = h
+            let (part, t, m, surv) = h
                 .join()
                 .map_err(|_| anyhow::anyhow!("grep worker panicked"))
                 .unwrap_or_default();
             matches.extend(part);
             truncated |= t;
             grep_files += m;
+            neg_survivors_local.extend(surv);
+        }
+        // neg-grep-only: survivors become file hits (files not containing the pattern)
+        if !neg_survivors_local.is_empty() {
+            neg_survivors_local.sort();
+            neg_survivors_local.dedup();
+            neg_survivors = neg_survivors_local;
         }
         if matches.len() > MAX_HITS_OUT {
             matches.truncate(MAX_HITS_OUT);
             truncated = true;
         }
+    }
+
+    // build file-hit list: path-filter survivors + neg-grep survivors
+    let files_total = hits.len() + neg_survivors.len();
+    let mut files: Vec<FileHit> = hits
+        .into_iter()
+        .take(MAX_FILES_OUT)
+        .map(|(score, e)| FileHit {
+            path: String::from_utf8_lossy(&e.path).into_owned(),
+            score,
+        })
+        .collect();
+    let room = MAX_FILES_OUT.saturating_sub(files.len());
+    for sp in neg_survivors.into_iter().take(room) {
+        files.push(FileHit { path: sp, score: 0 });
     }
 
     Ok(SearchResp {
@@ -496,7 +540,10 @@ pub fn blob_text(mirror: &PathBuf, refspec: &str, path: &str) -> Result<BlobResp
     let repo = crate::repo::handle(&tsr);
     let commit = crate::diff::commit_of(&repo, refspec)?;
     let tree = commit.tree()?;
-    let Some(entry) = tree.lookup_entry_by_path(path)? else {
+    let path = path.trim_matches('/');
+    let Some(entry) = tree.lookup_entry_by_path(path).map_err(|_| {
+        crate::diff::not_found(format!("path not found (or crosses a submodule): {path}"))
+    })? else {
         return Err(crate::diff::not_found(format!("path not found: {path}")));
     };
     let mode = entry.mode();
@@ -509,17 +556,21 @@ pub fn blob_text(mirror: &PathBuf, refspec: &str, path: &str) -> Result<BlobResp
             binary: false,
             truncated: false,
             text: String::new(),
+            size: 0,
+            lines: 0,
         });
     }
     let blob = entry.object()?.try_into_blob()?;
     let data: &[u8] = blob.data.as_bytes();
-    let binary = data.iter().take(8192).any(|&b| b == 0);
+    let (size, lines, binary) = crate::diff::blob_facts(data);
     if binary {
         return Ok(BlobResp {
             path: path.to_string(),
             binary: true,
             truncated: false,
             text: String::new(),
+            size,
+            lines,
         });
     }
     let s = String::from_utf8_lossy(data);
@@ -537,5 +588,7 @@ pub fn blob_text(mirror: &PathBuf, refspec: &str, path: &str) -> Result<BlobResp
         binary: false,
         truncated,
         text,
+        size,
+        lines,
     })
 }

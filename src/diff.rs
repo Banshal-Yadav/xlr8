@@ -59,6 +59,8 @@ pub struct Hunk {
 pub struct FileDiff {
     pub path: String,
     pub binary: bool,
+    #[serde(default)]
+    pub too_large: bool,
     pub hunks: Vec<Hunk>,
 }
 
@@ -85,7 +87,7 @@ pub(crate) fn resolve_ids(
     Ok((b, h))
 }
 
-fn blob_bytes(
+pub(crate) fn blob_bytes(
     mirror: &std::path::Path,
     repo: &gix::Repository,
     id: gix::ObjectId,
@@ -105,6 +107,20 @@ fn blob_bytes(
 // git's buffer_is_binary(): NUL within the first 8000 bytes only.
 pub(crate) fn has_nul(d: &[u8]) -> bool {
     d.iter().take(8000).any(|&b| b == 0)
+}
+
+/// Shared size/line/binary facts for one blob's full data — one definition
+/// for /blob and /meta so they can never disagree. Lines = '\n' count + 1
+/// when the text doesn't end in a newline (git-style); 0 for binary.
+pub(crate) fn blob_facts(data: &[u8]) -> (u64, u64, bool) {
+    if has_nul(data) {
+        return (data.len() as u64, 0, true);
+    }
+    let mut lines = data.iter().filter(|&&b| b == b'\n').count() as u64;
+    if !data.is_empty() && !data.ends_with(b"\n") {
+        lines += 1;
+    }
+    (data.len() as u64, lines, false)
 }
 
 pub fn compare(mirror: &PathBuf, base: &str, head: &str) -> Result<DiffSummary> {
@@ -364,8 +380,12 @@ pub fn file_diff(
     let head_tree = head_commit.tree()?;
 
     // renamed files sit under their pre-rename name on the base side
-    let old_entry = base_tree.lookup_entry_by_path(old_path.unwrap_or(path))?;
-    let new_entry = head_tree.lookup_entry_by_path(path)?;
+    let old_entry = base_tree
+        .lookup_entry_by_path(old_path.unwrap_or(path))
+        .map_err(|_| not_found(format!("path not found (or crosses a submodule): {path}")))?;
+    let new_entry = head_tree
+        .lookup_entry_by_path(path)
+        .map_err(|_| not_found(format!("path not found (or crosses a submodule): {path}")))?;
     let (old_id, old_is_gitlink) = match old_entry {
         Some(e) => (Some(e.object_id()), e.mode().is_commit()),
         None => (None, false),
@@ -438,6 +458,7 @@ pub fn file_diff(
         return Ok(FileDiff {
             path: path.to_string(),
             binary: false,
+            too_large: false,
             hunks,
         });
     }
@@ -450,12 +471,25 @@ pub fn file_diff(
         Some(id) => blob_bytes(mirror, &repo, id)?,
         None => None,
     };
+    // cap: don't Myers-diff (or ship) blobs over 1 MiB — OOM/hang risk
+    const DIFF_MAX: usize = 1 << 20;
+    if old_bytes.as_ref().is_some_and(|b| b.len() > DIFF_MAX)
+        || new_bytes.as_ref().is_some_and(|b| b.len() > DIFF_MAX)
+    {
+        return Ok(FileDiff {
+            path: path.to_string(),
+            binary: false,
+            too_large: true,
+            hunks: Vec::new(),
+        });
+    }
     let binary =
         old_bytes.as_deref().is_some_and(has_nul) || new_bytes.as_deref().is_some_and(has_nul);
     if binary {
         return Ok(FileDiff {
             path: path.to_string(),
             binary: true,
+            too_large: false,
             hunks: Vec::new(),
         });
     }
@@ -466,6 +500,7 @@ pub fn file_diff(
     Ok(FileDiff {
         path: path.to_string(),
         binary: false,
+        too_large: false,
         hunks,
     })
 }

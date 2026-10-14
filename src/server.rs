@@ -1,4 +1,4 @@
-use crate::{diff, mirror, search, AppState};
+use crate::{diff, mirror, search, tree, AppState};
 use axum::body::{Body, Bytes};
 use axum::extract::{Path, Query, Request, State};
 use axum::http::{header, StatusCode};
@@ -119,9 +119,35 @@ fn resp_put_if_current(key: String, body: Vec<u8>, generation: Option<u64>) -> B
     if generation.is_some_and(|expected| expected != g.generation) {
         return bytes;
     }
+    // subtract replaced body so overwrite doesn't drift the counter up
+    if let Some(old) = g.map.get(&key) {
+        g.bytes = g.bytes.saturating_sub(old.len());
+    }
     if g.bytes + bytes.len() > RESP_CAP {
-        g.map.clear();
-        g.bytes = 0;
+        // evict oldest entries (HashMap iteration order ≈ insertion recency)
+        // until the new body fits — never nuke the whole hot cache
+        let need = g.bytes + bytes.len() - RESP_CAP;
+        let mut freed = 0usize;
+        let evict: Vec<String> = g
+            .map
+            .keys()
+            .filter(|k| k.as_str() != key.as_str())
+            .cloned()
+            .collect();
+        for k in evict {
+            if freed >= need {
+                break;
+            }
+            if let Some(v) = g.map.remove(&k) {
+                g.bytes = g.bytes.saturating_sub(v.len());
+                freed += v.len();
+            }
+        }
+        // still no room? fall back to a clear (body larger than remaining cap)
+        if g.bytes + bytes.len() > RESP_CAP {
+            g.map.clear();
+            g.bytes = 0;
+        }
     }
     g.bytes += bytes.len();
     g.map.insert(key, bytes.clone());
@@ -162,6 +188,9 @@ pub fn router(state: AppState) -> Router {
         .route("/api/{owner}/{repo}/file", get(file_diff))
         .route("/api/{owner}/{repo}/search", get(search))
         .route("/api/{owner}/{repo}/blob", get(blob))
+        .route("/api/{owner}/{repo}/tree", get(tree))
+        .route("/api/{owner}/{repo}/files", get(files))
+        .route("/api/{owner}/{repo}/meta", get(meta))
         .route("/api/{owner}/{repo}/pulls", get(pulls))
         .layer(middleware::from_fn(count_requests))
         .with_state(state)
@@ -458,8 +487,10 @@ async fn commits(
             refspec.as_deref().unwrap_or("")
         ),
     );
-    if let Some(b) = resp_get(&key) {
-        return Ok(json_body(b));
+    if !fresh {
+        if let Some(b) = resp_get(&key) {
+            return Ok(json_body(b));
+        }
     }
     let body = tokio::task::spawn_blocking(move || {
         let list = diff::commits(&path, limit, refspec.as_deref(), want_stats, offset)?;
@@ -521,28 +552,32 @@ async fn file_diff(
 ) -> Result<Response, (StatusCode, String)> {
     let r = mirror::RepoRef { owner, name: repo };
     let path = mirror::mirror_path(&r);
+    let base = q.base.replace('\0', "");
+    let head = q.head.replace('\0', "");
+    let fp = q.path.replace('\0', "");
+    let op = q.old_path.as_deref().map(|s| s.replace('\0', ""));
     let key = resp_key(
         &path,
         &format!(
             "file\0{}\0{}\0{}\0{}",
-            q.base,
-            q.head,
-            q.path,
-            q.old_path.as_deref().unwrap_or("")
+            base,
+            head,
+            fp,
+            op.as_deref().unwrap_or("")
         ),
     );
     if let Some(b) = resp_get(&key) {
         return Ok(json_body(b));
     }
-    let (base, head, p, op) = (q.base.clone(), q.head.clone(), q.path.clone(), q.old_path);
+    let generation = resp_generation();
     let body = tokio::task::spawn_blocking(move || {
-        let fd = diff::file_diff(&path, &base, &head, &p, op.as_deref())?;
+        let fd = diff::file_diff(&path, &base, &head, &fp, op.as_deref())?;
         serde_json::to_vec(&fd).map_err(anyhow::Error::from)
     })
     .await
     .map_err(|e| api_err(e.into()))?
     .map_err(api_err)?;
-    Ok(json_body(resp_put(key, body)))
+    Ok(json_body(resp_put_if_current(key, body, Some(generation))))
 }
 
 #[derive(Deserialize)]
@@ -560,14 +595,15 @@ async fn search(
     let r = mirror::RepoRef { owner, name: repo };
     let path = mirror::mirror_path(&r);
     let refspec = q.r#ref.clone().unwrap_or_else(|| "HEAD".to_string());
-    let key = resp_key(&path, &format!("search\0{refspec}\0{}", q.q));
+    let refspec = refspec.replace('\0', "");
+    let query = q.q.replace('\0', "");
+    let key = resp_key(&path, &format!("search\0{refspec}\0{query}"));
     if q.fresh.as_deref() != Some("1") {
         if let Some(b) = resp_get(&key) {
             return Ok(json_body(b));
         }
     }
     let generation = resp_generation();
-    let query = q.q.clone();
     let body = tokio::task::spawn_blocking(move || {
         let sr = search::search(&path, &refspec, &query)?;
         serde_json::to_vec(&sr).map_err(anyhow::Error::from)
@@ -591,11 +627,13 @@ async fn blob(
     let r = mirror::RepoRef { owner, name: repo };
     let path = mirror::mirror_path(&r);
     let refspec = q.r#ref.clone().unwrap_or_else(|| "HEAD".to_string());
-    let key = resp_key(&path, &format!("blob\0{refspec}\0{}", q.path));
+    let refspec = refspec.replace('\0', "");
+    let p = q.path.replace('\0', "");
+    let key = resp_key(&path, &format!("blob\0{refspec}\0{p}"));
     if let Some(b) = resp_get(&key) {
         return Ok(json_body(b));
     }
-    let p = q.path.clone();
+    let generation = resp_generation();
     let body = tokio::task::spawn_blocking(move || {
         let br = search::blob_text(&path, &refspec, &p)?;
         serde_json::to_vec(&br).map_err(anyhow::Error::from)
@@ -603,7 +641,119 @@ async fn blob(
     .await
     .map_err(|e| api_err(e.into()))?
     .map_err(api_err)?;
-    Ok(json_body(resp_put(key, body)))
+    Ok(json_body(resp_put_if_current(key, body, Some(generation))))
+}
+
+#[derive(Deserialize)]
+struct TreeQuery {
+    r#ref: Option<String>,
+    /// directory path; empty/absent = repo root
+    path: Option<String>,
+    fresh: Option<String>,
+}
+
+async fn tree(
+    Path((owner, repo)): Path<(String, String)>,
+    Query(q): Query<TreeQuery>,
+) -> Result<Response, (StatusCode, String)> {
+    let r = mirror::RepoRef { owner, name: repo };
+    let path = mirror::mirror_path(&r);
+    let refspec = q.r#ref.clone().unwrap_or_else(|| "HEAD".to_string());
+    let dir = q.path.clone().unwrap_or_default();
+    // NUL in query values would collide resp_key fields — strip
+    let refspec = refspec.replace('\0', "");
+    let dir = dir.replace('\0', "");
+    let key = resp_key(&path, &format!("tree\0{refspec}\0{dir}"));
+    if q.fresh.as_deref() != Some("1") {
+        if let Some(b) = resp_get(&key) {
+            return Ok(json_body(b));
+        }
+    }
+    let generation = resp_generation();
+    let body = tokio::task::spawn_blocking(move || {
+        let tr = tree::list_dir(&path, &refspec, &dir)?;
+        serde_json::to_vec(&tr).map_err(anyhow::Error::from)
+    })
+    .await
+    .map_err(|e| api_err(e.into()))?
+    .map_err(api_err)?;
+    Ok(json_body(resp_put_if_current(key, body, Some(generation))))
+}
+
+#[derive(Deserialize)]
+struct FilesQuery {
+    r#ref: Option<String>,
+    fresh: Option<String>,
+}
+
+#[derive(Serialize)]
+struct FilesResp {
+    files: Vec<String>,
+    took_ms: u128,
+}
+
+async fn files(
+    Path((owner, repo)): Path<(String, String)>,
+    Query(q): Query<FilesQuery>,
+) -> Result<Response, (StatusCode, String)> {
+    let r = mirror::RepoRef { owner, name: repo };
+    let path = mirror::mirror_path(&r);
+    let refspec = q.r#ref.clone().unwrap_or_else(|| "HEAD".to_string());
+    let refspec = refspec.replace('\0', "");
+    let key = resp_key(&path, &format!("files\0{refspec}"));
+    if q.fresh.as_deref() != Some("1") {
+        if let Some(b) = resp_get(&key) {
+            return Ok(json_body(b));
+        }
+    }
+    let generation = resp_generation();
+    let body = tokio::task::spawn_blocking(move || {
+        let t0 = std::time::Instant::now();
+        let files = tree::all_paths(&path, &refspec)?;
+        serde_json::to_vec(&FilesResp {
+            files,
+            took_ms: t0.elapsed().as_millis(),
+        })
+        .map_err(anyhow::Error::from)
+    })
+    .await
+    .map_err(|e| api_err(e.into()))?
+    .map_err(api_err)?;
+    Ok(json_body(resp_put_if_current(key, body, Some(generation))))
+}
+
+#[derive(Deserialize)]
+struct MetaQuery {
+    r#ref: Option<String>,
+    path: String,
+    fresh: Option<String>,
+}
+
+async fn meta(
+    Path((owner, repo)): Path<(String, String)>,
+    Query(q): Query<MetaQuery>,
+) -> Result<Response, (StatusCode, String)> {
+    let r = mirror::RepoRef { owner, name: repo };
+    let path = mirror::mirror_path(&r);
+    let refspec = q.r#ref.clone().unwrap_or_else(|| "HEAD".to_string());
+    let refspec = refspec.replace('\0', "");
+    let path_q = q.path.replace('\0', "");
+    let key = resp_key(&path, &format!("meta\0{refspec}\0{path_q}"));
+    if q.fresh.as_deref() != Some("1") {
+        if let Some(b) = resp_get(&key) {
+            return Ok(json_body(b));
+        }
+    }
+    let generation = resp_generation();
+    let p = path_q;
+    let body = tokio::task::spawn_blocking(move || {
+        let fm = tree::file_meta(&path, &refspec, &p)?;
+        serde_json::to_vec(&fm).map_err(anyhow::Error::from)
+    })
+    .await
+    .map_err(|e| api_err(e.into()))?
+    .map_err(api_err)?;
+    Ok(json_body(resp_put_if_current(key, body, Some(generation))))
 }
 
 #[derive(Serialize)]

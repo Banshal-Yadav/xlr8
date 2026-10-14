@@ -7,6 +7,7 @@ mod repo;
 mod rewrite;
 mod search;
 mod server;
+mod tree;
 
 use anyhow::{bail, Result};
 
