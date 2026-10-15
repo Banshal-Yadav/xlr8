@@ -67,6 +67,8 @@ def main():
     ap.add_argument("--port", type=int, default=8902)
     ap.add_argument("--threads", type=int, default=None,
                     help="XLR8_THREADS for the server (default: unset = all cores)")
+    ap.add_argument("--settle", type=float, default=1.0,
+                    help="seconds to let the server settle before cold/disk timing")
     args = ap.parse_args()
 
     log = open(os.path.join(ROOT, "docs", "BENCHMARKS-raw.txt"), "a", encoding="utf-8")
@@ -96,7 +98,7 @@ def main():
         # cold: wipe every cmp, restart, first hit per range
         for _, slug, *_ in RANGES:
             shutil.rmtree(cmp_dir(slug), ignore_errors=True)
-        proc, base_url = start_server(args.port, args.threads)
+        proc, base_url = start_server(args.port, args.threads, settle=args.settle)
         try:
             for tag, slug, owner, repo, base, head in RANGES:
                 url = f"{base_url}/api/{owner}/{repo}/diff?base={base}&head={head}"
@@ -107,7 +109,7 @@ def main():
         finally:
             stop_server(proc)
         # disk: keep cmp, restart, first hit per range
-        proc, base_url = start_server(args.port, args.threads)
+        proc, base_url = start_server(args.port, args.threads, settle=args.settle)
         try:
             for tag, slug, owner, repo, base, head in RANGES:
                 url = f"{base_url}/api/{owner}/{repo}/diff?base={base}&head={head}"

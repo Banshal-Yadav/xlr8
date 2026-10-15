@@ -50,7 +50,10 @@ assets/index.html  UI (vanilla JS, tabs: Commits / Compare / Pulls)
 bench/gen_stress.sh  synthetic 2000-file fixture generator
 bench/gen_million.sh synthetic 1M-line-diff fixture generator
 bench/benchlib.py    shared harness helpers (server boot, keep-alive GET)
-bench/absbench.py    git/cold/disk/warm harness (6 ranges, --threads N)
+bench/absbench.py    git/cold/disk/warm harness (6 ranges, --threads N, --settle)
+bench/multipass.py   runs absbench N times, prints median-of-pass medians (the
+                     publishable cold numbers — cold is bimodal between passes)
+bench/git_internal.py  git wall vs own internal time (GIT_TRACE_PERFORMANCE)
 bench/million_bench.py  1M-line-diff harness
 bench/api_bench.py  endpoint latency harness
 docs/benchmark.md    full perf history + numbers
@@ -103,14 +106,31 @@ Mirrors cache to `%LOCALAPPDATA%\xlr8\mirrors` automatically.
   shell).
 - Release-only perf numbers; debug is 3-4× slower.
 
-**Full numbers and the perf history live in `benchmark.md`.** Headline
-(warm, vs `git diff --numstat -M`): stress 2000 files
+**Full numbers and the perf history live in `benchmark.md`.** Headline (warm,
+vs `git diff --numstat -M`): stress 2000 files
 **~96 ms vs git 143 ms**, ripgrep 15-year range **~65 ms vs 125 ms**,
 rg91 **~35 ms vs 132 ms**; real repos: libuv 495 files **~90 ms vs ~230 ms**,
 libuv short **~37 ms vs ~200 ms**, tokio 867 files **~139 ms vs ~217 ms**,
 tokio short **~37 ms vs ~127 ms**. Repeat requests for an already-computed
 range are served from the **response cache**: **1.4–12 ms** (keep-alive
 hello **0.68 ms**).
+
+**Current, reproducible numbers are `docs/BENCHMARKS.md`** (re-measured
+2026-10-16 on the Windows laptop, median of 3 passes × 200 warm reps). Every
+figure there is a **median of 3 harness passes** (`bench/multipass.py`) — cold
+compare swings up to 2× between passes, so a single run must not be quoted.
+Key corrections to older notes:
+
+- Cold compare is two distinct costs: compute **plus** a one-time repo open +
+  pack-index load (~45 ms on ripgrep). Only the CLI prewarm path
+  (`prewarm()` in `main.rs`) avoids it; `--serve`/multi-repo first touches read
+  ~10–15 ms worse on that range.
+- Publish **both** git columns: `git diff --numstat -M` **wall** (includes
+  ~28 ms spawn) and **internal** (`GIT_TRACE_PERFORMANCE`). The wall column
+  flatters xlr8. Against internal, cold beats git 1.1–2.6× on 7/8 ranges, and
+  **1-thread loses 7/8** — the correct equal-cores statement.
+- `absbench.py` needs `--settle 1.0` before timing cold/disk, else the first
+  range of a pass absorbs server-startup contention.
 
 ## Perf gotchas (learned the hard way — don't regress)
 

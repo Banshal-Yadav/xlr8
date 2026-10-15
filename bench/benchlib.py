@@ -23,7 +23,14 @@ def cmp_dir(slug):
     return mirror_path(slug) + ".cmp"
 
 
-def start_server(port, threads=None):
+def start_server(port, threads=None, settle=0.0):
+    """Boot the server and wait until it can answer.
+
+    `settle` (seconds) waits past the ready probe so the process has finished
+    its post-start work before the caller starts timing. Without it the first
+    range timed in a `cold` pass eats server-startup contention (~10-15 ms of
+    noise) because `/api/repos` can answer before the accept loop is warm.
+    """
     env = dict(os.environ)
     if threads is not None:
         env["XLR8_THREADS"] = str(threads)
@@ -39,6 +46,8 @@ def start_server(port, threads=None):
         try:
             with urllib.request.urlopen(base + "/api/repos", timeout=2) as r:
                 if r.status == 200:
+                    if settle:
+                        time.sleep(settle)
                     return proc, base
         except Exception:
             time.sleep(0.1)

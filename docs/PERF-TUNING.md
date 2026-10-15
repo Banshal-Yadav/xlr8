@@ -1,13 +1,16 @@
 # Performance tuning log — 2026-10-11
 
-> **Re-verified 2026-10-11 (Windows laptop, AMD Ryzen 7 7735HS):** the full
-> 8-range harness was re-run at 100 warm reps / 5 cold+disk reps, both 16-thread
-> (default) and single-thread (`XLR8_THREADS=1`). All three features hold: warm
-> is ~0.1 ms on every range; cold (16T) beats git on 7/8 ranges (1.7–4.8×);
-> single-thread cold wins 4/8 (the honest equal-cores view). 1M-line diff
-> 0.19 ms warm / 57 ms after restart. Fresh tables: `docs/BENCHMARKS.md`; raw
-> log: `docs/BENCHMARKS-raw.txt`. The ARM/PRoot numbers below remain as the
-> original tuning record.
+> **Re-verified 2026-10-16 (Windows laptop, AMD Ryzen 7 7735HS):** the full
+> 8-range harness was re-run at 200 warm reps, cold/disk as the **median of 3
+> passes** (`bench/multipass.py`, 5 reps each), both 16-thread (default) and
+> single-thread, with a `--settle` fix so the first range of a pass no longer
+> absorbs server-startup contention. Warm is ~0.1 ms on every range. Cold (16T)
+> beats git **wall-clock** on 7/8 ranges (1.7×–5.3×) but only **1.1×–2.6×**
+> against git's **internal** time; 1-thread cold wins 5/8 on wall but **1/8 on
+> internal** (see `docs/BENCHMARKS.md`, which now publishes both git columns).
+> 1M-line diff 0.17 ms warm / 68 ms after restart (git 121 ms wall / 94 ms
+> internal). Raw log: `docs/BENCHMARKS-raw.txt`. The ARM/PRoot numbers below
+> remain as the original tuning record.
 
 Tuning log for the three optimizations in `docs/PERF-FINDINGS.md`. All numbers
 below are raw measurements on the ARM/PRoot device (pessimal floor — laptop
@@ -29,10 +32,13 @@ baseline = `git diff --numstat -M` wall, medians of 3.
 | Parity vs `git -M` rename pairs | 5/6 ranges exact, libuv 17v16 | **unchanged: 5/6 exact, libuv 17v16** | harness re-run |
 
 Claim in `docs/PERF-FINDINGS.md` TL;DR ("single-threaded, xlr8 is *slower* than
-git on every range") is now **partially obsolete**: on this device 1-thread
-xlr8 beats git on rg91 (≈1.1–1.8×), libuv495 (up to 3.15× on a good run),
-ties rg252 (≈1.1×), and still loses tokio867 (≈0.75×) and stress2000
-(≈0.2–0.4×, gix delta chains — see "Remaining").
+git on **every** range") is **wrong as stated** but right in spirit. Re-measured
+at 9 reps: against git **wall** time, 1-thread xlr8 wins 5/8 (rg252, tokio867,
+libuv495, stressgiant, million_mod500k) and loses rg91 + stress2000. Against
+git's **internal** time (spawn excluded, the fair per-core test) it wins only
+**stressgiant (1.23×)** and ties million_mod500k (0.97×) — losing the other six.
+So the honest equal-cores conclusion stands: xlr8's cold margin is parallelism
+plus git's ~28 ms spawn, not a faster diff core. Warm is unaffected (~0.1 ms).
 
 ## 1. Hash-band rename scoring (the big lever)
 
@@ -154,18 +160,26 @@ use. Sources: [repo README](https://github.com/openai/math),
 - `diffcore-delta.c` `hash_chars`: shift-7 ×2 rolling hash, spans end at LF
   or 64 bytes, CRLF `\r` skipped for text, bucketed `mod 107927`, byte-length
   weighted counts; `count_changes` = sorted-merge `Σ min(src,dst)` per bucket.
-- xlr8's band mirrors this shape with exact per-line u64 hashes (finer
-  buckets ⇒ slightly higher scores than git's folded buckets; explains the
-  one extra libuv pair, which git's bucketing lands below 50 %).
+  - xlr8's band mirrors this shape with exact per-line u64 hashes (finer
+  buckets ⇒ slightly higher scores than git's folded buckets; this explains the
+  one extra libuv pair — both of that pair's candidates score ≈0.97–0.99 for us
+  while git's estimate orders them the other way; see `docs/BENCHMARKS.md`
+  "Correctness vs git", which supersedes the earlier "git lands it below 50 %"
+  explanation).
 
 ## 6. Remaining gaps (honest)
+
+> Scoping: the numbers in this section and §7 are from the **ARM/PRoot** box
+> (§7 is explicitly an A/B of two binaries on that device). Windows re-measured
+> figures are in `docs/BENCHMARKS.md`; where they differ, prefer that file.
 
 - **stress2000 / deep delta chains**: gix inflate still ~4× slower than git
   even on zlib-rs. Options unchanged from `docs/PERF-FINDINGS.md`: accept
   (real repos have shallow deltas), boot pre-resolve, or upstream gix work
   (cache intermediate bases — the pack cache only stores chain endpoints).
-- **tokio T=1 (0.75×)**: renames+stats both pay full blob inflation serially;
-  multi-thread (default) already beats git here (151 ms vs ≈190 ms).
+- **tokio T=1**: renames+stats both pay full blob inflation serially. On the
+  ARM box this read 0.75×; on the Windows box (9 reps) it is 1.15× vs git wall
+  but 0.80× vs git internal — i.e. still a per-core loss.
 - **walk phase tail** (occasionally 30–44 ms on tokio cold runs):
   tree diff + ref peeling; not investigated.
 - **git baseline variance on this device is large** (libuv git median swung

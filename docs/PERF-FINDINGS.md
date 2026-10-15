@@ -3,6 +3,18 @@
 Investigation date: 2026-10-08. Measured on the Windows laptop (AMD Ryzen 7
 7735HS, 8C/16T, NVMe), release binary, packed mirrors, warm page cache.
 
+> **Update 2026-10-16 (re-measured, 9 reps, settled harness):** the TL;DR below
+> was written against an earlier binary. Re-run on the current build, the
+> single-threaded claim is **no longer true**: against git's *wall* time,
+> 1-thread xlr8 wins 5/8 ranges (1.08–2.06×) and loses rg91 and the deep-delta
+> synthetic. But against git's *internal* time (spawn excluded — the fair
+> per-core test), 1-thread xlr8 wins **only 1/8** (stressgiant 1.23×) and ties
+> million_mod500k (0.97×). So the conclusion the TL;DR drew is right even
+> though its premise was wrong: **on equal cores git is still ahead, and the
+> multi-thread default is what produces xlr8's cold margin.** Bottleneck B
+> (rename scoring) below is fixed; see `docs/PERF-TUNING.md`. Full tables:
+> `docs/BENCHMARKS.md`.
+>
 > **Update 2026-10-11:** bottleneck #2 (rename scoring) is fixed — git-style
 > hash-band scoring, see `docs/PERF-TUNING.md` (Myers runs per compare: tokio
 > ~9650 → 15; parity vs `git -M` unchanged). Bottleneck #1 mitigated via
@@ -10,17 +22,19 @@ Investigation date: 2026-10-08. Measured on the Windows laptop (AMD Ryzen 7
 
 ## TL;DR
 
-xlr8 currently beats git **only because it uses 16 threads** where git uses 1.
-Single-threaded, xlr8 is *slower* than git on every range. Two independent
-bottlenecks explain it, and neither is the diff algorithm:
+xlr8's cold advantage over git comes mostly from **using 16 threads** where git
+uses 1, plus git's ~28 ms process spawn which an already-running server does not
+pay. Measured on the current build, single-threaded against git's internal time
+xlr8 wins only 1 of 8 ranges. Two independent bottlenecks explained the original
+gap, and neither is the diff algorithm:
 
 1. **Delta-chain inflate** (synthetic stress case) — gix's pack reader is ~6×
-   slower than git at resolving delta chains.
-2. **Rename scoring** (real-repo case) — xlr8 runs a full Myers diff per
-   candidate pair; git uses a cheap hash estimate.
+   slower than git at resolving delta chains. *(still true)*
+2. **Rename scoring** (real-repo case) — xlr8 ran a full Myers diff per candidate
+   pair; git uses a cheap hash estimate. *(**fixed** — see `PERF-TUNING.md`)*
 
-The fix that would make xlr8 genuinely faster than git per-core is **#2**
-(hash-based rename scoring). See "How to beat git" below.
+The fix that would make xlr8 genuinely faster than git per-core was **#2**
+(hash-based rename scoring). It has been implemented; #1 remains.
 
 ## Method
 
@@ -94,12 +108,19 @@ then discards it and runs Myers anyway.
 
 ## Notes on the README comparison
 
-- The README "vs git CLI" column uses git's **wall time** (includes ~25–30 ms
-  process startup). Against git's *internal* time the margin shrinks:
-  tokio 2.6× (not 3.3×), stress 1.3× (not 1.8×).
-- The "~1 ms cached" number is a **response-cache hit** — it is not computing a
+- The README/BENCHMARKS `git` column uses git's **wall time** (includes ~28 ms
+  process startup, measured: 27.2–34.2 ms across ranges on this box). Against
+  git's *internal* time (`GIT_TRACE_PERFORMANCE`) the margins shrink sharply —
+  e.g. tokio867 4.3× → 2.1×, libuv495 2.6× → 1.8×, and **rg91 inverts to
+  a loss (0.7× → 0.3×)**. Both columns are now published in
+  `docs/BENCHMARKS.md`; use the internal column for any per-core claim.
+- The "~0.1 ms cached" number is a **response-cache hit** — it is not computing a
   diff fast, it is not computing at all. Legitimate for a web UI, but not a
   diff-speed claim.
 - xlr8 does more work than `git diff --numstat` (own rename detector, JSON,
   HTTP), so "faster than git" compares a parallel server doing extra work
   against a serial CLI.
+- Cold measurements are less reproducible than warm ones: whole-pass medians
+  move up to ~2× between passes for small/synthetic ranges (see "Cold-start
+  variance" in `docs/BENCHMARKS.md`). Publish medians of ≥3 passes; never quote
+  a single run.

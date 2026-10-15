@@ -381,3 +381,990 @@ tokio867            126.8       31.4       16.8       0.21      4.03     592.7
 libuv495             98.9       41.1        3.0       0.17      2.41     575.0
 stress2000           59.9       52.6       26.5       0.20      1.14     302.4
 stressgiant          64.7       33.9        1.7       0.17      1.91     382.7
+
+# xlr8 absbench  warm=200 reps=9 threads=default  2026-10-16 01:25:06
+# device: AMD64 Family 25 Model 68 Stepping 1, AuthenticAMD
+GIT rg91           med=    53.9ms files=   91 +3603 -1069
+GIT rg252          med=    74.2ms files=  252 +72431 -21345
+GIT tokio867       med=   132.8ms files=  867 +127740 -24088
+GIT libuv495       med=   109.0ms files=  496 +80230 -23972
+GIT stress2000     med=    74.3ms files= 2000 +4000 -0
+GIT stressgiant    med=    83.7ms files= 2002 +44000 -0
+  COLD rg91           rep0     60.5ms files=91 +3607 -1073
+  COLD rg252          rep0     23.3ms files=252 +72442 -21356
+  COLD tokio867       rep0     36.3ms files=867 +127896 -24244
+  COLD libuv495       rep0     52.6ms files=495 +80354 -24096
+  COLD stress2000     rep0     35.8ms files=2000 +4000 -0
+  COLD stressgiant    rep0     13.0ms files=2002 +44000 -0
+  DISK rg91           rep0     68.0ms
+  DISK rg252          rep0     13.9ms
+  DISK tokio867       rep0     19.8ms
+  DISK libuv495       rep0     27.6ms
+  DISK stress2000     rep0     16.7ms
+  DISK stressgiant    rep0      2.3ms
+  COLD rg91           rep1     83.3ms files=91 +3607 -1073
+  COLD rg252          rep1     28.9ms files=252 +72442 -21356
+  COLD tokio867       rep1     46.1ms files=867 +127896 -24244
+  COLD libuv495       rep1     26.3ms files=495 +80354 -24096
+  COLD stress2000     rep1     59.0ms files=2000 +4000 -0
+  COLD stressgiant    rep1     12.6ms files=2002 +44000 -0
+  DISK rg91           rep1     66.5ms
+  DISK rg252          rep1     25.6ms
+  DISK tokio867       rep1     17.7ms
+  DISK libuv495       rep1     15.5ms
+  DISK stress2000     rep1      4.6ms
+  DISK stressgiant    rep1      1.5ms
+  COLD rg91           rep2     60.1ms files=91 +3607 -1073
+  COLD rg252          rep2     20.8ms files=252 +72442 -21356
+  COLD tokio867       rep2     34.9ms files=867 +127896 -24244
+  COLD libuv495       rep2     49.0ms files=495 +80354 -24096
+  COLD stress2000     rep2     35.8ms files=2000 +4000 -0
+  COLD stressgiant    rep2     25.7ms files=2002 +44000 -0
+  DISK rg91           rep2     50.5ms
+  DISK rg252          rep2     11.7ms
+  DISK tokio867       rep2     18.0ms
+  DISK libuv495       rep2      3.5ms
+  DISK stress2000     rep2     28.1ms
+  DISK stressgiant    rep2     12.2ms
+  COLD rg91           rep3     85.4ms files=91 +3607 -1073
+  COLD rg252          rep3     29.2ms files=252 +72442 -21356
+  COLD tokio867       rep3     57.0ms files=867 +127896 -24244
+  COLD libuv495       rep3     32.1ms files=495 +80354 -24096
+  COLD stress2000     rep3     63.7ms files=2000 +4000 -0
+  COLD stressgiant    rep3     13.6ms files=2002 +44000 -0
+  DISK rg91           rep3     48.0ms
+  DISK rg252          rep3      1.9ms
+  DISK tokio867       rep3     14.3ms
+  DISK libuv495       rep3     13.7ms
+  DISK stress2000     rep3     15.8ms
+  DISK stressgiant    rep3      1.5ms
+  COLD rg91           rep4     70.7ms files=91 +3607 -1073
+  COLD rg252          rep4     19.4ms files=252 +72442 -21356
+  COLD tokio867       rep4     42.9ms files=867 +127896 -24244
+  COLD libuv495       rep4     24.0ms files=495 +80354 -24096
+  COLD stress2000     rep4     35.8ms files=2000 +4000 -0
+  COLD stressgiant    rep4     24.5ms files=2002 +44000 -0
+  DISK rg91           rep4     42.2ms
+  DISK rg252          rep4     20.4ms
+  DISK tokio867       rep4     17.8ms
+  DISK libuv495       rep4     14.5ms
+  DISK stress2000     rep4     15.4ms
+  DISK stressgiant    rep4      1.6ms
+  COLD rg91           rep5     66.9ms files=91 +3607 -1073
+  COLD rg252          rep5     29.5ms files=252 +72442 -21356
+  COLD tokio867       rep5     53.7ms files=867 +127896 -24244
+  COLD libuv495       rep5     35.0ms files=495 +80354 -24096
+  COLD stress2000     rep5     34.0ms files=2000 +4000 -0
+  COLD stressgiant    rep5     12.5ms files=2002 +44000 -0
+  DISK rg91           rep5     80.7ms
+  DISK rg252          rep5      3.6ms
+  DISK tokio867       rep5      7.9ms
+  DISK libuv495       rep5     28.2ms
+  DISK stress2000     rep5     28.4ms
+  DISK stressgiant    rep5     13.4ms
+  COLD rg91           rep6     82.1ms files=91 +3607 -1073
+  COLD rg252          rep6     29.6ms files=252 +72442 -21356
+  COLD tokio867       rep6     44.2ms files=867 +127896 -24244
+  COLD libuv495       rep6     34.6ms files=495 +80354 -24096
+  COLD stress2000     rep6     51.6ms files=2000 +4000 -0
+  COLD stressgiant    rep6     18.0ms files=2002 +44000 -0
+  DISK rg91           rep6     65.2ms
+  DISK rg252          rep6      2.0ms
+  DISK tokio867       rep6     26.5ms
+  DISK libuv495       rep6      4.5ms
+  DISK stress2000     rep6     25.4ms
+  DISK stressgiant    rep6     15.3ms
+  COLD rg91           rep7     61.2ms files=91 +3607 -1073
+  COLD rg252          rep7     19.1ms files=252 +72442 -21356
+  COLD tokio867       rep7     33.5ms files=867 +127896 -24244
+  COLD libuv495       rep7     45.4ms files=495 +80354 -24096
+  COLD stress2000     rep7     35.9ms files=2000 +4000 -0
+  COLD stressgiant    rep7     23.2ms files=2002 +44000 -0
+  DISK rg91           rep7     71.1ms
+  DISK rg252          rep7      1.6ms
+  DISK tokio867       rep7     27.6ms
+  DISK libuv495       rep7     13.9ms
+  DISK stress2000     rep7     15.1ms
+  DISK stressgiant    rep7     14.1ms
+  COLD rg91           rep8     85.6ms files=91 +3607 -1073
+  COLD rg252          rep8     23.1ms files=252 +72442 -21356
+  COLD tokio867       rep8     37.2ms files=867 +127896 -24244
+  COLD libuv495       rep8     29.0ms files=495 +80354 -24096
+  COLD stress2000     rep8     55.5ms files=2000 +4000 -0
+  COLD stressgiant    rep8     13.6ms files=2002 +44000 -0
+  DISK rg91           rep8     70.4ms
+  DISK rg252          rep8      2.1ms
+  DISK tokio867       rep8     22.2ms
+  DISK libuv495       rep8     15.4ms
+  DISK stress2000     rep8     15.1ms
+  DISK stressgiant    rep8     13.7ms
+  WARM rg91           n=200 med=   0.22ms min=   0.11 max=   0.84
+  WARM rg252          n=200 med=   0.25ms min=   0.12 max=   1.12
+  WARM tokio867       n=200 med=   0.21ms min=   0.15 max=   0.73
+  WARM libuv495       n=200 med=   0.19ms min=   0.12 max=   0.74
+  WARM stress2000     n=200 med=   0.20ms min=   0.16 max=   1.17
+  WARM stressgiant    n=200 med=   0.23ms min=   0.16 max=   1.38
+
+=== SUMMARY (medians) ===
+range                 git       cold       disk       warm  cold/git  warm/git
+rg91                 53.9       70.7       66.5       0.22      0.76     250.4
+rg252                74.2       23.3        3.6       0.25      3.18     301.9
+tokio867            132.8       42.9       18.0       0.21      3.10     639.6
+libuv495            109.0       34.6       14.5       0.19      3.15     566.9
+stress2000           74.3       35.9       15.8       0.20      2.07     368.3
+stressgiant          83.7       13.6       12.2       0.23      6.13     371.2
+
+# xlr8 absbench  warm=200 reps=9 threads=default  2026-10-16 01:30:17
+# device: AMD64 Family 25 Model 68 Stepping 1, AuthenticAMD
+GIT rg91           med=    47.8ms files=   91 +3603 -1069
+GIT rg252          med=    66.3ms files=  252 +72431 -21345
+GIT tokio867       med=   119.6ms files=  867 +127740 -24088
+GIT libuv495       med=    95.0ms files=  496 +80230 -23972
+GIT stress2000     med=    64.1ms files= 2000 +4000 -0
+GIT stressgiant    med=    67.7ms files= 2002 +44000 -0
+  COLD rg91           rep0     70.7ms files=91 +3607 -1073
+  COLD rg252          rep0     27.9ms files=252 +72442 -21356
+  COLD tokio867       rep0     42.6ms files=867 +127896 -24244
+  COLD libuv495       rep0     38.6ms files=495 +80354 -24096
+  COLD stress2000     rep0     33.0ms files=2000 +4000 -0
+  COLD stressgiant    rep0     12.8ms files=2002 +44000 -0
+  DISK rg91           rep0     45.8ms
+  DISK rg252          rep0     18.5ms
+  DISK tokio867       rep0     16.9ms
+  DISK libuv495       rep0     15.9ms
+  DISK stress2000     rep0      2.8ms
+  DISK stressgiant    rep0     25.9ms
+  COLD rg91           rep1     50.4ms files=91 +3607 -1073
+  COLD rg252          rep1     20.5ms files=252 +72442 -21356
+  COLD tokio867       rep1     30.5ms files=867 +127896 -24244
+  COLD libuv495       rep1     23.9ms files=495 +80354 -24096
+  COLD stress2000     rep1     34.9ms files=2000 +4000 -0
+  COLD stressgiant    rep1     10.7ms files=2002 +44000 -0
+  DISK rg91           rep1     68.1ms
+  DISK rg252          rep1     17.9ms
+  DISK tokio867       rep1      3.7ms
+  DISK libuv495       rep1      3.0ms
+  DISK stress2000     rep1      3.1ms
+  DISK stressgiant    rep1     21.4ms
+  COLD rg91           rep2     54.0ms files=91 +3607 -1073
+  COLD rg252          rep2     28.2ms files=252 +72442 -21356
+  COLD tokio867       rep2     48.1ms files=867 +127896 -24244
+  COLD libuv495       rep2     37.3ms files=495 +80354 -24096
+  COLD stress2000     rep2     54.6ms files=2000 +4000 -0
+  COLD stressgiant    rep2     22.4ms files=2002 +44000 -0
+  DISK rg91           rep2     62.7ms
+  DISK rg252          rep2     19.0ms
+  DISK tokio867       rep2      3.1ms
+  DISK libuv495       rep2     14.2ms
+  DISK stress2000     rep2     15.8ms
+  DISK stressgiant    rep2      1.4ms
+  COLD rg91           rep3     53.4ms files=91 +3607 -1073
+  COLD rg252          rep3     19.8ms files=252 +72442 -21356
+  COLD tokio867       rep3     40.2ms files=867 +127896 -24244
+  COLD libuv495       rep3     38.5ms files=495 +80354 -24096
+  COLD stress2000     rep3     33.9ms files=2000 +4000 -0
+  COLD stressgiant    rep3     11.0ms files=2002 +44000 -0
+  DISK rg91           rep3     43.6ms
+  DISK rg252          rep3     20.5ms
+  DISK tokio867       rep3      3.7ms
+  DISK libuv495       rep3      2.9ms
+  DISK stress2000     rep3     25.4ms
+  DISK stressgiant    rep3      1.8ms
+  COLD rg91           rep4     74.1ms files=91 +3607 -1073
+  COLD rg252          rep4     50.8ms files=252 +72442 -21356
+  COLD tokio867       rep4     50.3ms files=867 +127896 -24244
+  COLD libuv495       rep4     37.4ms files=495 +80354 -24096
+  COLD stress2000     rep4     31.5ms files=2000 +4000 -0
+  COLD stressgiant    rep4     30.2ms files=2002 +44000 -0
+  DISK rg91           rep4     43.2ms
+  DISK rg252          rep4     25.5ms
+  DISK tokio867       rep4     18.3ms
+  DISK libuv495       rep4      3.2ms
+  DISK stress2000     rep4     27.7ms
+  DISK stressgiant    rep4     14.0ms
+  COLD rg91           rep5     56.8ms files=91 +3607 -1073
+  COLD rg252          rep5     20.2ms files=252 +72442 -21356
+  COLD tokio867       rep5     52.0ms files=867 +127896 -24244
+  COLD libuv495       rep5     23.2ms files=495 +80354 -24096
+  COLD stress2000     rep5     32.2ms files=2000 +4000 -0
+  COLD stressgiant    rep5     30.3ms files=2002 +44000 -0
+  DISK rg91           rep5     43.3ms
+  DISK rg252          rep5     13.1ms
+  DISK tokio867       rep5     17.8ms
+  DISK libuv495       rep5     15.7ms
+  DISK stress2000     rep5      3.1ms
+  DISK stressgiant    rep5      1.2ms
+  COLD rg91           rep6     53.7ms files=91 +3607 -1073
+  COLD rg252          rep6     20.0ms files=252 +72442 -21356
+  COLD tokio867       rep6     33.0ms files=867 +127896 -24244
+  COLD libuv495       rep6     45.4ms files=495 +80354 -24096
+  COLD stress2000     rep6     54.2ms files=2000 +4000 -0
+  COLD stressgiant    rep6     10.8ms files=2002 +44000 -0
+  DISK rg91           rep6     43.8ms
+  DISK rg252          rep6      1.3ms
+  DISK tokio867       rep6     14.2ms
+  DISK libuv495       rep6     15.5ms
+  DISK stress2000     rep6     14.9ms
+  DISK stressgiant    rep6      1.4ms
+  COLD rg91           rep7     53.8ms files=91 +3607 -1073
+  COLD rg252          rep7     20.0ms files=252 +72442 -21356
+  COLD tokio867       rep7     44.4ms files=867 +127896 -24244
+  COLD libuv495       rep7     25.1ms files=495 +80354 -24096
+  COLD stress2000     rep7     51.2ms files=2000 +4000 -0
+  COLD stressgiant    rep7     22.0ms files=2002 +44000 -0
+  DISK rg91           rep7     46.3ms
+  DISK rg252          rep7      1.4ms
+  DISK tokio867       rep7     29.2ms
+  DISK libuv495       rep7     15.4ms
+  DISK stress2000     rep7     15.2ms
+  DISK stressgiant    rep7      1.5ms
+  COLD rg91           rep8     63.7ms files=91 +3607 -1073
+  COLD rg252          rep8     29.1ms files=252 +72442 -21356
+  COLD tokio867       rep8     35.5ms files=867 +127896 -24244
+  COLD libuv495       rep8     43.7ms files=495 +80354 -24096
+  COLD stress2000     rep8     35.7ms files=2000 +4000 -0
+  COLD stressgiant    rep8     23.3ms files=2002 +44000 -0
+  DISK rg91           rep8     69.0ms
+  DISK rg252          rep8     14.3ms
+  DISK tokio867       rep8      4.8ms
+  DISK libuv495       rep8     20.7ms
+  DISK stress2000     rep8     15.2ms
+  DISK stressgiant    rep8     14.3ms
+  WARM rg91           n=200 med=   0.11ms min=   0.09 max=   0.27
+  WARM rg252          n=200 med=   0.11ms min=   0.09 max=   0.23
+  WARM tokio867       n=200 med=   0.12ms min=   0.11 max=   0.38
+  WARM libuv495       n=200 med=   0.11ms min=   0.10 max=   0.27
+  WARM stress2000     n=200 med=   0.14ms min=   0.11 max=   0.36
+  WARM stressgiant    n=200 med=   0.13ms min=   0.12 max=   0.34
+
+=== SUMMARY (medians) ===
+range                 git       cold       disk       warm  cold/git  warm/git
+rg91                 47.8       54.0       45.8       0.11      0.89     440.7
+rg252                66.3       20.5       17.9       0.11      3.24     625.8
+tokio867            119.6       42.6       14.2       0.12      2.81     983.6
+libuv495             95.0       37.4       15.4       0.11      2.54     837.5
+stress2000           64.1       34.9       15.2       0.14      1.84     459.7
+stressgiant          67.7       22.0        1.8       0.13      3.07     509.1
+
+# xlr8 absbench  warm=200 reps=9 threads=1  2026-10-16 01:31:07
+# device: AMD64 Family 25 Model 68 Stepping 1, AuthenticAMD
+GIT rg91           med=    49.2ms files=   91 +3603 -1069
+GIT rg252          med=    66.8ms files=  252 +72431 -21345
+GIT tokio867       med=   121.3ms files=  867 +127740 -24088
+GIT libuv495       med=    97.0ms files=  496 +80230 -23972
+GIT stress2000     med=    67.3ms files= 2000 +4000 -0
+GIT stressgiant    med=    68.9ms files= 2002 +44000 -0
+  COLD rg91           rep0     63.5ms files=91 +3607 -1073
+  COLD rg252          rep0     52.9ms files=252 +72442 -21356
+  COLD tokio867       rep0    106.5ms files=867 +127896 -24244
+  COLD libuv495       rep0     83.1ms files=495 +80354 -24096
+  COLD stress2000     rep0    234.3ms files=2000 +4000 -0
+  COLD stressgiant    rep0     25.5ms files=2002 +44000 -0
+  DISK rg91           rep0     45.6ms
+  DISK rg252          rep0     22.9ms
+  DISK tokio867       rep0     17.5ms
+  DISK libuv495       rep0     15.3ms
+  DISK stress2000     rep0     14.8ms
+  DISK stressgiant    rep0     13.6ms
+  COLD rg91           rep1     66.7ms files=91 +3607 -1073
+  COLD rg252          rep1     38.3ms files=252 +72442 -21356
+  COLD tokio867       rep1    103.5ms files=867 +127896 -24244
+  COLD libuv495       rep1     85.0ms files=495 +80354 -24096
+  COLD stress2000     rep1    224.2ms files=2000 +4000 -0
+  COLD stressgiant    rep1     39.9ms files=2002 +44000 -0
+  DISK rg91           rep1     65.8ms
+  DISK rg252          rep1     20.4ms
+  DISK tokio867       rep1     18.2ms
+  DISK libuv495       rep1      2.9ms
+  DISK stress2000     rep1     28.1ms
+  DISK stressgiant    rep1      1.6ms
+  COLD rg91           rep2     86.2ms files=91 +3607 -1073
+  COLD rg252          rep2     37.1ms files=252 +72442 -21356
+  COLD tokio867       rep2    113.3ms files=867 +127896 -24244
+  COLD libuv495       rep2     90.7ms files=495 +80354 -24096
+  COLD stress2000     rep2    223.1ms files=2000 +4000 -0
+  COLD stressgiant    rep2     27.1ms files=2002 +44000 -0
+  DISK rg91           rep2     70.3ms
+  DISK rg252          rep2     16.6ms
+  DISK tokio867       rep2      4.1ms
+  DISK libuv495       rep2      3.9ms
+  DISK stress2000     rep2      3.1ms
+  DISK stressgiant    rep2     18.5ms
+  COLD rg91           rep3     93.8ms files=91 +3607 -1073
+  COLD rg252          rep3     45.2ms files=252 +72442 -21356
+  COLD tokio867       rep3    118.9ms files=867 +127896 -24244
+  COLD libuv495       rep3     82.8ms files=495 +80354 -24096
+  COLD stress2000     rep3    218.5ms files=2000 +4000 -0
+  COLD stressgiant    rep3     26.8ms files=2002 +44000 -0
+  DISK rg91           rep3     59.9ms
+  DISK rg252          rep3      1.9ms
+  DISK tokio867       rep3     22.0ms
+  DISK libuv495       rep3     15.3ms
+  DISK stress2000     rep3      3.1ms
+  DISK stressgiant    rep3      2.9ms
+  COLD rg91           rep4     93.1ms files=91 +3607 -1073
+  COLD rg252          rep4     80.0ms files=252 +72442 -21356
+  COLD tokio867       rep4    118.1ms files=867 +127896 -24244
+  COLD libuv495       rep4     81.3ms files=495 +80354 -24096
+  COLD stress2000     rep4    273.6ms files=2000 +4000 -0
+  COLD stressgiant    rep4     39.8ms files=2002 +44000 -0
+  DISK rg91           rep4     59.5ms
+  DISK rg252          rep4     21.7ms
+  DISK tokio867       rep4      3.5ms
+  DISK libuv495       rep4     14.4ms
+  DISK stress2000     rep4     15.3ms
+  DISK stressgiant    rep4      1.4ms
+  COLD rg91           rep5     62.3ms files=91 +3607 -1073
+  COLD rg252          rep5     44.6ms files=252 +72442 -21356
+  COLD tokio867       rep5    126.7ms files=867 +127896 -24244
+  COLD libuv495       rep5     88.8ms files=495 +80354 -24096
+  COLD stress2000     rep5    226.3ms files=2000 +4000 -0
+  COLD stressgiant    rep5     26.3ms files=2002 +44000 -0
+  DISK rg91           rep5     61.2ms
+  DISK rg252          rep5     14.4ms
+  DISK tokio867       rep5     18.4ms
+  DISK libuv495       rep5     14.5ms
+  DISK stress2000     rep5     14.3ms
+  DISK stressgiant    rep5     13.8ms
+  COLD rg91           rep6     94.1ms files=91 +3607 -1073
+  COLD rg252          rep6     46.3ms files=252 +72442 -21356
+  COLD tokio867       rep6    149.9ms files=867 +127896 -24244
+  COLD libuv495       rep6    101.7ms files=495 +80354 -24096
+  COLD stress2000     rep6    262.8ms files=2000 +4000 -0
+  COLD stressgiant    rep6     26.4ms files=2002 +44000 -0
+  DISK rg91           rep6     62.1ms
+  DISK rg252          rep6     14.0ms
+  DISK tokio867       rep6      6.8ms
+  DISK libuv495       rep6     28.5ms
+  DISK stress2000     rep6     33.2ms
+  DISK stressgiant    rep6     26.2ms
+  COLD rg91           rep7    100.1ms files=91 +3607 -1073
+  COLD rg252          rep7     50.7ms files=252 +72442 -21356
+  COLD tokio867       rep7    137.3ms files=867 +127896 -24244
+  COLD libuv495       rep7     95.1ms files=495 +80354 -24096
+  COLD stress2000     rep7    250.4ms files=2000 +4000 -0
+  COLD stressgiant    rep7     40.6ms files=2002 +44000 -0
+  DISK rg91           rep7     80.8ms
+  DISK rg252          rep7     13.2ms
+  DISK tokio867       rep7      5.0ms
+  DISK libuv495       rep7      5.6ms
+  DISK stress2000     rep7     23.7ms
+  DISK stressgiant    rep7     12.8ms
+  COLD rg91           rep8     82.1ms files=91 +3607 -1073
+  COLD rg252          rep8     39.9ms files=252 +72442 -21356
+  COLD tokio867       rep8    124.6ms files=867 +127896 -24244
+  COLD libuv495       rep8    101.8ms files=495 +80354 -24096
+  COLD stress2000     rep8    244.7ms files=2000 +4000 -0
+  COLD stressgiant    rep8     27.3ms files=2002 +44000 -0
+  DISK rg91           rep8     57.5ms
+  DISK rg252          rep8     20.5ms
+  DISK tokio867       rep8     19.0ms
+  DISK libuv495       rep8     14.8ms
+  DISK stress2000     rep8      4.3ms
+  DISK stressgiant    rep8     25.5ms
+  WARM rg91           n=200 med=   0.15ms min=   0.11 max=   0.41
+  WARM rg252          n=200 med=   0.17ms min=   0.11 max=   0.43
+  WARM tokio867       n=200 med=   0.21ms min=   0.15 max=   0.49
+  WARM libuv495       n=200 med=   0.17ms min=   0.12 max=   0.34
+  WARM stress2000     n=200 med=   0.20ms min=   0.16 max=   0.59
+  WARM stressgiant    n=200 med=   0.18ms min=   0.16 max=   0.52
+
+=== SUMMARY (medians) ===
+range                 git       cold       disk       warm  cold/git  warm/git
+rg91                 49.2       86.2       61.2       0.15      0.57     333.2
+rg252                66.8       45.2       16.6       0.17      1.48     402.0
+tokio867            121.3      118.9       17.5       0.21      1.02     579.6
+libuv495             97.0       88.8       14.5       0.17      1.09     570.2
+stress2000           67.3      234.3       14.8       0.20      0.29     339.5
+stressgiant          68.9       27.1       13.6       0.18      2.55     376.0
+
+# git wall vs internal (GIT_TRACE_PERFORMANCE) reps=9  2026-10-16 01:36:36
+range               wall  internal    spawn
+--------------------------------------------
+rg91               51.7m     20.9m    30.8m
+rg252              72.3m     41.3m    31.0m
+tokio867          128.7m     94.5m    34.2m
+libuv495          106.7m     72.8m    33.9m
+stress2000         73.3m     40.7m    32.6m
+stressgiant        75.6m     42.7m    32.9m
+
+spawn overhead = wall - internal (git's own init + process creation)
+
+# xlr8 absbench  warm=200 reps=9 threads=default  2026-10-16 01:36:36
+# device: AMD64 Family 25 Model 68 Stepping 1, AuthenticAMD
+GIT rg91           med=    46.8ms files=   91 +3603 -1069
+GIT rg252          med=    68.6ms files=  252 +72431 -21345
+GIT tokio867       med=   121.2ms files=  867 +127740 -24088
+GIT libuv495       med=    95.3ms files=  496 +80230 -23972
+GIT stress2000     med=    63.5ms files= 2000 +4000 -0
+GIT stressgiant    med=    67.3ms files= 2002 +44000 -0
+  COLD rg91           rep0     76.5ms files=91 +3607 -1073
+  COLD rg252          rep0     19.0ms files=252 +72442 -21356
+  COLD tokio867       rep0     29.2ms files=867 +127896 -24244
+  COLD libuv495       rep0     24.4ms files=495 +80354 -24096
+  COLD stress2000     rep0     46.5ms files=2000 +4000 -0
+  COLD stressgiant    rep0     10.2ms files=2002 +44000 -0
+  DISK rg91           rep0     64.9ms
+  DISK rg252          rep0     13.1ms
+  DISK tokio867       rep0      3.1ms
+  DISK libuv495       rep0      2.4ms
+  DISK stress2000     rep0     27.2ms
+  DISK stressgiant    rep0     14.1ms
+  COLD rg91           rep1     73.2ms files=91 +3607 -1073
+  COLD rg252          rep1     28.3ms files=252 +72442 -21356
+  COLD tokio867       rep1     30.9ms files=867 +127896 -24244
+  COLD libuv495       rep1     45.3ms files=495 +80354 -24096
+  COLD stress2000     rep1     54.7ms files=2000 +4000 -0
+  COLD stressgiant    rep1     10.1ms files=2002 +44000 -0
+  DISK rg91           rep1     69.3ms
+  DISK rg252          rep1      1.1ms
+  DISK tokio867       rep1      2.6ms
+  DISK libuv495       rep1      2.4ms
+  DISK stress2000     rep1      2.4ms
+  DISK stressgiant    rep1      1.0ms
+  COLD rg91           rep2     77.5ms files=91 +3607 -1073
+  COLD rg252          rep2     43.3ms files=252 +72442 -21356
+  COLD tokio867       rep2     32.4ms files=867 +127896 -24244
+  COLD libuv495       rep2     22.8ms files=495 +80354 -24096
+  COLD stress2000     rep2     32.5ms files=2000 +4000 -0
+  COLD stressgiant    rep2     11.1ms files=2002 +44000 -0
+  DISK rg91           rep2     66.5ms
+  DISK rg252          rep2     16.3ms
+  DISK tokio867       rep2     17.5ms
+  DISK libuv495       rep2      2.7ms
+  DISK stress2000     rep2     27.1ms
+  DISK stressgiant    rep2     14.5ms
+  COLD rg91           rep3     67.9ms files=91 +3607 -1073
+  COLD rg252          rep3     50.7ms files=252 +72442 -21356
+  COLD tokio867       rep3     53.1ms files=867 +127896 -24244
+  COLD libuv495       rep3     37.7ms files=495 +80354 -24096
+  COLD stress2000     rep3     33.4ms files=2000 +4000 -0
+  COLD stressgiant    rep3     28.5ms files=2002 +44000 -0
+  DISK rg91           rep3     59.5ms
+  DISK rg252          rep3      2.3ms
+  DISK tokio867       rep3      7.8ms
+  DISK libuv495       rep3      4.6ms
+  DISK stress2000     rep3      4.1ms
+  DISK stressgiant    rep3      2.5ms
+  COLD rg91           rep4     58.1ms files=91 +3607 -1073
+  COLD rg252          rep4     20.4ms files=252 +72442 -21356
+  COLD tokio867       rep4     30.5ms files=867 +127896 -24244
+  COLD libuv495       rep4     42.3ms files=495 +80354 -24096
+  COLD stress2000     rep4     32.5ms files=2000 +4000 -0
+  COLD stressgiant    rep4     30.5ms files=2002 +44000 -0
+  DISK rg91           rep4     45.9ms
+  DISK rg252          rep4     22.5ms
+  DISK tokio867       rep4     17.4ms
+  DISK libuv495       rep4     15.6ms
+  DISK stress2000     rep4      3.0ms
+  DISK stressgiant    rep4      1.2ms
+  COLD rg91           rep5     55.0ms files=91 +3607 -1073
+  COLD rg252          rep5     47.4ms files=252 +72442 -21356
+  COLD tokio867       rep5     30.3ms files=867 +127896 -24244
+  COLD libuv495       rep5     40.7ms files=495 +80354 -24096
+  COLD stress2000     rep5     56.9ms files=2000 +4000 -0
+  COLD stressgiant    rep5     12.2ms files=2002 +44000 -0
+  DISK rg91           rep5     63.2ms
+  DISK rg252          rep5      1.5ms
+  DISK tokio867       rep5     19.9ms
+  DISK libuv495       rep5     14.8ms
+  DISK stress2000     rep5     16.2ms
+  DISK stressgiant    rep5     13.4ms
+  COLD rg91           rep6     51.2ms files=91 +3607 -1073
+  COLD rg252          rep6     19.0ms files=252 +72442 -21356
+  COLD tokio867       rep6     30.4ms files=867 +127896 -24244
+  COLD libuv495       rep6     26.4ms files=495 +80354 -24096
+  COLD stress2000     rep6     56.9ms files=2000 +4000 -0
+  COLD stressgiant    rep6     21.0ms files=2002 +44000 -0
+  DISK rg91           rep6     43.5ms
+  DISK rg252          rep6      1.6ms
+  DISK tokio867       rep6     23.3ms
+  DISK libuv495       rep6     14.7ms
+  DISK stress2000     rep6      3.4ms
+  DISK stressgiant    rep6     27.4ms
+  COLD rg91           rep7     77.8ms files=91 +3607 -1073
+  COLD rg252          rep7     28.2ms files=252 +72442 -21356
+  COLD tokio867       rep7     42.0ms files=867 +127896 -24244
+  COLD libuv495       rep7     36.1ms files=495 +80354 -24096
+  COLD stress2000     rep7     33.1ms files=2000 +4000 -0
+  COLD stressgiant    rep7     30.2ms files=2002 +44000 -0
+  DISK rg91           rep7     64.9ms
+  DISK rg252          rep7     20.1ms
+  DISK tokio867       rep7      3.2ms
+  DISK libuv495       rep7      3.0ms
+  DISK stress2000     rep7     26.4ms
+  DISK stressgiant    rep7     14.1ms
+  COLD rg91           rep8     54.0ms files=91 +3607 -1073
+  COLD rg252          rep8     18.3ms files=252 +72442 -21356
+  COLD tokio867       rep8     52.3ms files=867 +127896 -24244
+  COLD libuv495       rep8     37.8ms files=495 +80354 -24096
+  COLD stress2000     rep8     33.1ms files=2000 +4000 -0
+  COLD stressgiant    rep8     10.6ms files=2002 +44000 -0
+  DISK rg91           rep8     45.3ms
+  DISK rg252          rep8     25.4ms
+  DISK tokio867       rep8     17.6ms
+  DISK libuv495       rep8      2.9ms
+  DISK stress2000     rep8     12.8ms
+  DISK stressgiant    rep8     14.2ms
+  WARM rg91           n=200 med=   0.13ms min=   0.11 max=   0.32
+  WARM rg252          n=200 med=   0.13ms min=   0.13 max=   0.42
+  WARM tokio867       n=200 med=   0.17ms min=   0.11 max=   0.33
+  WARM libuv495       n=200 med=   0.13ms min=   0.12 max=   0.37
+  WARM stress2000     n=200 med=   0.17ms min=   0.16 max=   0.31
+  WARM stressgiant    n=200 med=   0.18ms min=   0.16 max=   0.27
+
+=== SUMMARY (medians) ===
+range                 git       cold       disk       warm  cold/git  warm/git
+rg91                 46.8       67.9       63.2       0.13      0.69     374.2
+rg252                68.6       28.2       13.1       0.13      2.43     523.8
+tokio867            121.2       30.9       17.4       0.17      3.93     727.4
+libuv495             95.3       37.7        3.0       0.13      2.53     718.4
+stress2000           63.5       33.4       12.8       0.17      1.90     381.1
+stressgiant          67.3       12.2       14.1       0.18      5.53     370.4
+
+# xlr8 absbench  warm=200 reps=9 threads=default  2026-10-16 01:37:27
+# device: AMD64 Family 25 Model 68 Stepping 1, AuthenticAMD
+GIT rg91           med=    48.6ms files=   91 +3603 -1069
+GIT rg252          med=    71.0ms files=  252 +72431 -21345
+GIT tokio867       med=   121.6ms files=  867 +127740 -24088
+GIT libuv495       med=    98.8ms files=  496 +80230 -23972
+GIT stress2000     med=    65.2ms files= 2000 +4000 -0
+GIT stressgiant    med=    69.1ms files= 2002 +44000 -0
+  COLD rg91           rep0     51.7ms files=91 +3607 -1073
+  COLD rg252          rep0     26.2ms files=252 +72442 -21356
+  COLD tokio867       rep0     47.2ms files=867 +127896 -24244
+  COLD libuv495       rep0     24.0ms files=495 +80354 -24096
+  COLD stress2000     rep0     32.5ms files=2000 +4000 -0
+  COLD stressgiant    rep0     24.6ms files=2002 +44000 -0
+  DISK rg91           rep0     61.1ms
+  DISK rg252          rep0     20.4ms
+  DISK tokio867       rep0     17.9ms
+  DISK libuv495       rep0      3.1ms
+  DISK stress2000     rep0      2.8ms
+  DISK stressgiant    rep0     23.7ms
+  COLD rg91           rep1     71.4ms files=91 +3607 -1073
+  COLD rg252          rep1     27.8ms files=252 +72442 -21356
+  COLD tokio867       rep1     30.2ms files=867 +127896 -24244
+  COLD libuv495       rep1     24.2ms files=495 +80354 -24096
+  COLD stress2000     rep1     51.9ms files=2000 +4000 -0
+  COLD stressgiant    rep1     21.8ms files=2002 +44000 -0
+  DISK rg91           rep1     44.8ms
+  DISK rg252          rep1     23.5ms
+  DISK tokio867       rep1      3.1ms
+  DISK libuv495       rep1     28.4ms
+  DISK stress2000     rep1      2.5ms
+  DISK stressgiant    rep1      1.3ms
+  COLD rg91           rep2     73.9ms files=91 +3607 -1073
+  COLD rg252          rep2     27.2ms files=252 +72442 -21356
+  COLD tokio867       rep2     44.9ms files=867 +127896 -24244
+  COLD libuv495       rep2     37.8ms files=495 +80354 -24096
+  COLD stress2000     rep2     54.8ms files=2000 +4000 -0
+  COLD stressgiant    rep2     12.5ms files=2002 +44000 -0
+  DISK rg91           rep2     43.8ms
+  DISK rg252          rep2     26.5ms
+  DISK tokio867       rep2     16.9ms
+  DISK libuv495       rep2     16.7ms
+  DISK stress2000     rep2     15.0ms
+  DISK stressgiant    rep2     13.7ms
+  COLD rg91           rep3     53.1ms files=91 +3607 -1073
+  COLD rg252          rep3     38.9ms files=252 +72442 -21356
+  COLD tokio867       rep3     41.4ms files=867 +127896 -24244
+  COLD libuv495       rep3     24.2ms files=495 +80354 -24096
+  COLD stress2000     rep3     33.6ms files=2000 +4000 -0
+  COLD stressgiant    rep3     11.9ms files=2002 +44000 -0
+  DISK rg91           rep3     43.4ms
+  DISK rg252          rep3     16.1ms
+  DISK tokio867       rep3     16.9ms
+  DISK libuv495       rep3     14.7ms
+  DISK stress2000     rep3     16.1ms
+  DISK stressgiant    rep3     14.6ms
+  COLD rg91           rep4     54.0ms files=91 +3607 -1073
+  COLD rg252          rep4     27.2ms files=252 +72442 -21356
+  COLD tokio867       rep4     47.4ms files=867 +127896 -24244
+  COLD libuv495       rep4     36.7ms files=495 +80354 -24096
+  COLD stress2000     rep4     32.1ms files=2000 +4000 -0
+  COLD stressgiant    rep4     32.5ms files=2002 +44000 -0
+  DISK rg91           rep4     43.0ms
+  DISK rg252          rep4     12.0ms
+  DISK tokio867       rep4     17.5ms
+  DISK libuv495       rep4     15.7ms
+  DISK stress2000     rep4      2.8ms
+  DISK stressgiant    rep4     11.8ms
+  COLD rg91           rep5     73.5ms files=91 +3607 -1073
+  COLD rg252          rep5     38.1ms files=252 +72442 -21356
+  COLD tokio867       rep5     49.1ms files=867 +127896 -24244
+  COLD libuv495       rep5     39.2ms files=495 +80354 -24096
+  COLD stress2000     rep5     51.6ms files=2000 +4000 -0
+  COLD stressgiant    rep5     11.1ms files=2002 +44000 -0
+  DISK rg91           rep5     66.8ms
+  DISK rg252          rep5     20.4ms
+  DISK tokio867       rep5      3.9ms
+  DISK libuv495       rep5      3.2ms
+  DISK stress2000     rep5     25.6ms
+  DISK stressgiant    rep5     13.2ms
+  COLD rg91           rep6     51.7ms files=91 +3607 -1073
+  COLD rg252          rep6     28.0ms files=252 +72442 -21356
+  COLD tokio867       rep6     49.4ms files=867 +127896 -24244
+  COLD libuv495       rep6     22.1ms files=495 +80354 -24096
+  COLD stress2000     rep6     32.3ms files=2000 +4000 -0
+  COLD stressgiant    rep6     26.8ms files=2002 +44000 -0
+  DISK rg91           rep6     42.4ms
+  DISK rg252          rep6     24.3ms
+  DISK tokio867       rep6      3.6ms
+  DISK libuv495       rep6     29.1ms
+  DISK stress2000     rep6     14.8ms
+  DISK stressgiant    rep6     14.3ms
+  COLD rg91           rep7     53.6ms files=91 +3607 -1073
+  COLD rg252          rep7     19.6ms files=252 +72442 -21356
+  COLD tokio867       rep7     29.9ms files=867 +127896 -24244
+  COLD libuv495       rep7     33.6ms files=495 +80354 -24096
+  COLD stress2000     rep7     55.6ms files=2000 +4000 -0
+  COLD stressgiant    rep7     20.2ms files=2002 +44000 -0
+  DISK rg91           rep7     44.5ms
+  DISK rg252          rep7      1.6ms
+  DISK tokio867       rep7     25.4ms
+  DISK libuv495       rep7     15.5ms
+  DISK stress2000     rep7     15.2ms
+  DISK stressgiant    rep7     14.5ms
+  COLD rg91           rep8     52.5ms files=91 +3607 -1073
+  COLD rg252          rep8     48.7ms files=252 +72442 -21356
+  COLD tokio867       rep8     47.9ms files=867 +127896 -24244
+  COLD libuv495       rep8     39.5ms files=495 +80354 -24096
+  COLD stress2000     rep8     54.7ms files=2000 +4000 -0
+  COLD stressgiant    rep8     11.0ms files=2002 +44000 -0
+  DISK rg91           rep8     63.0ms
+  DISK rg252          rep8     18.8ms
+  DISK tokio867       rep8     18.0ms
+  DISK libuv495       rep8      3.1ms
+  DISK stress2000     rep8      2.4ms
+  DISK stressgiant    rep8     23.3ms
+  WARM rg91           n=200 med=   0.12ms min=   0.10 max=   0.31
+  WARM rg252          n=200 med=   0.12ms min=   0.11 max=   0.27
+  WARM tokio867       n=200 med=   0.16ms min=   0.13 max=   0.35
+  WARM libuv495       n=200 med=   0.13ms min=   0.11 max=   0.31
+  WARM stress2000     n=200 med=   0.18ms min=   0.16 max=   0.31
+  WARM stressgiant    n=200 med=   0.18ms min=   0.18 max=   0.37
+
+=== SUMMARY (medians) ===
+range                 git       cold       disk       warm  cold/git  warm/git
+rg91                 48.6       53.6       44.5       0.12      0.91     390.8
+rg252                71.0       27.8       20.4       0.12      2.56     600.7
+tokio867            121.6       47.2       16.9       0.16      2.58     762.3
+libuv495             98.8       33.6       15.5       0.13      2.94     749.4
+stress2000           65.2       51.6       14.8       0.18      1.26     364.4
+stressgiant          69.1       20.2       14.3       0.18      3.41     384.5
+
+# xlr8 absbench  warm=200 reps=9 threads=1  2026-10-16 01:38:22
+# device: AMD64 Family 25 Model 68 Stepping 1, AuthenticAMD
+GIT rg91           med=    48.2ms files=   91 +3603 -1069
+GIT rg252          med=    65.8ms files=  252 +72431 -21345
+GIT tokio867       med=   120.9ms files=  867 +127740 -24088
+GIT libuv495       med=    97.1ms files=  496 +80230 -23972
+GIT stress2000     med=    64.8ms files= 2000 +4000 -0
+GIT stressgiant    med=    68.1ms files= 2002 +44000 -0
+  COLD rg91           rep0     84.2ms files=91 +3607 -1073
+  COLD rg252          rep0     51.2ms files=252 +72442 -21356
+  COLD tokio867       rep0    114.3ms files=867 +127896 -24244
+  COLD libuv495       rep0     88.6ms files=495 +80354 -24096
+  COLD stress2000     rep0    222.4ms files=2000 +4000 -0
+  COLD stressgiant    rep0     26.2ms files=2002 +44000 -0
+  DISK rg91           rep0     62.5ms
+  DISK rg252          rep0     18.1ms
+  DISK tokio867       rep0     17.4ms
+  DISK libuv495       rep0      3.0ms
+  DISK stress2000     rep0      2.9ms
+  DISK stressgiant    rep0      1.2ms
+  COLD rg91           rep1     61.7ms files=91 +3607 -1073
+  COLD rg252          rep1     36.7ms files=252 +72442 -21356
+  COLD tokio867       rep1    104.0ms files=867 +127896 -24244
+  COLD libuv495       rep1     89.4ms files=495 +80354 -24096
+  COLD stress2000     rep1    200.5ms files=2000 +4000 -0
+  COLD stressgiant    rep1     39.9ms files=2002 +44000 -0
+  DISK rg91           rep1     43.3ms
+  DISK rg252          rep1     21.2ms
+  DISK tokio867       rep1      3.6ms
+  DISK libuv495       rep1     14.6ms
+  DISK stress2000     rep1     15.0ms
+  DISK stressgiant    rep1     12.5ms
+  COLD rg91           rep2     88.5ms files=91 +3607 -1073
+  COLD rg252          rep2     57.4ms files=252 +72442 -21356
+  COLD tokio867       rep2    128.4ms files=867 +127896 -24244
+  COLD libuv495       rep2     86.6ms files=495 +80354 -24096
+  COLD stress2000     rep2    198.4ms files=2000 +4000 -0
+  COLD stressgiant    rep2     48.4ms files=2002 +44000 -0
+  DISK rg91           rep2     66.4ms
+  DISK rg252          rep2     19.2ms
+  DISK tokio867       rep2      3.6ms
+  DISK libuv495       rep2     13.4ms
+  DISK stress2000     rep2     14.9ms
+  DISK stressgiant    rep2      1.4ms
+  COLD rg91           rep3     65.4ms files=91 +3607 -1073
+  COLD rg252          rep3     37.2ms files=252 +72442 -21356
+  COLD tokio867       rep3    101.6ms files=867 +127896 -24244
+  COLD libuv495       rep3     82.4ms files=495 +80354 -24096
+  COLD stress2000     rep3    214.1ms files=2000 +4000 -0
+  COLD stressgiant    rep3     42.1ms files=2002 +44000 -0
+  DISK rg91           rep3     43.7ms
+  DISK rg252          rep3      1.3ms
+  DISK tokio867       rep3     24.5ms
+  DISK libuv495       rep3      3.2ms
+  DISK stress2000     rep3     27.0ms
+  DISK stressgiant    rep3     14.4ms
+  COLD rg91           rep4     74.4ms files=91 +3607 -1073
+  COLD rg252          rep4     40.5ms files=252 +72442 -21356
+  COLD tokio867       rep4    145.6ms files=867 +127896 -24244
+  COLD libuv495       rep4     85.1ms files=495 +80354 -24096
+  COLD stress2000     rep4    241.8ms files=2000 +4000 -0
+  COLD stressgiant    rep4     29.0ms files=2002 +44000 -0
+  DISK rg91           rep4     61.5ms
+  DISK rg252          rep4     13.0ms
+  DISK tokio867       rep4     18.1ms
+  DISK libuv495       rep4     14.7ms
+  DISK stress2000     rep4      3.9ms
+  DISK stressgiant    rep4     26.0ms
+  COLD rg91           rep5     62.9ms files=91 +3607 -1073
+  COLD rg252          rep5     37.5ms files=252 +72442 -21356
+  COLD tokio867       rep5    104.7ms files=867 +127896 -24244
+  COLD libuv495       rep5     71.5ms files=495 +80354 -24096
+  COLD stress2000     rep5    219.1ms files=2000 +4000 -0
+  COLD stressgiant    rep5     39.4ms files=2002 +44000 -0
+  DISK rg91           rep5     55.9ms
+  DISK rg252          rep5     22.5ms
+  DISK tokio867       rep5      3.3ms
+  DISK libuv495       rep5      3.4ms
+  DISK stress2000     rep5      2.6ms
+  DISK stressgiant    rep5     20.9ms
+  COLD rg91           rep6     64.8ms files=91 +3607 -1073
+  COLD rg252          rep6     66.7ms files=252 +72442 -21356
+  COLD tokio867       rep6    105.5ms files=867 +127896 -24244
+  COLD libuv495       rep6     89.8ms files=495 +80354 -24096
+  COLD stress2000     rep6    211.1ms files=2000 +4000 -0
+  COLD stressgiant    rep6     42.6ms files=2002 +44000 -0
+  DISK rg91           rep6     64.1ms
+  DISK rg252          rep6     16.4ms
+  DISK tokio867       rep6      4.0ms
+  DISK libuv495       rep6     13.8ms
+  DISK stress2000     rep6     14.8ms
+  DISK stressgiant    rep6     14.3ms
+  COLD rg91           rep7     61.1ms files=91 +3607 -1073
+  COLD rg252          rep7     44.6ms files=252 +72442 -21356
+  COLD tokio867       rep7    100.8ms files=867 +127896 -24244
+  COLD libuv495       rep7     69.6ms files=495 +80354 -24096
+  COLD stress2000     rep7    221.1ms files=2000 +4000 -0
+  COLD stressgiant    rep7     26.2ms files=2002 +44000 -0
+  DISK rg91           rep7     66.8ms
+  DISK rg252          rep7     21.3ms
+  DISK tokio867       rep7     17.8ms
+  DISK libuv495       rep7     15.3ms
+  DISK stress2000     rep7     15.4ms
+  DISK stressgiant    rep7     13.5ms
+  COLD rg91           rep8     61.3ms files=91 +3607 -1073
+  COLD rg252          rep8     46.7ms files=252 +72442 -21356
+  COLD tokio867       rep8    112.6ms files=867 +127896 -24244
+  COLD libuv495       rep8     92.1ms files=495 +80354 -24096
+  COLD stress2000     rep8    199.1ms files=2000 +4000 -0
+  COLD stressgiant    rep8     25.2ms files=2002 +44000 -0
+  DISK rg91           rep8     64.7ms
+  DISK rg252          rep8     18.6ms
+  DISK tokio867       rep8     17.7ms
+  DISK libuv495       rep8     14.5ms
+  DISK stress2000     rep8      3.6ms
+  DISK stressgiant    rep8     25.8ms
+  WARM rg91           n=200 med=   0.12ms min=   0.11 max=   0.29
+  WARM rg252          n=200 med=   0.14ms min=   0.11 max=   0.24
+  WARM tokio867       n=200 med=   0.15ms min=   0.13 max=   0.29
+  WARM libuv495       n=200 med=   0.15ms min=   0.11 max=   0.34
+  WARM stress2000     n=200 med=   0.18ms min=   0.16 max=   0.35
+  WARM stressgiant    n=200 med=   0.17ms min=   0.13 max=   0.32
+
+=== SUMMARY (medians) ===
+range                 git       cold       disk       warm  cold/git  warm/git
+rg91                 48.2       64.8       62.5       0.12      0.74     395.8
+rg252                65.8       44.6       18.6       0.14      1.48     486.7
+tokio867            120.9      105.5       17.4       0.15      1.15     788.9
+libuv495             97.1       86.6       13.8       0.15      1.12     631.5
+stress2000           64.8      214.1       14.8       0.18      0.30     354.3
+stressgiant          68.1       39.4       14.3       0.17      1.73     391.1
+
+# xlr8 absbench  warm=200 reps=9 threads=default  2026-10-16 01:39:17
+# device: AMD64 Family 25 Model 68 Stepping 1, AuthenticAMD
+GIT rg91           med=    47.3ms files=   91 +3603 -1069
+GIT rg252          med=    68.4ms files=  252 +72431 -21345
+GIT tokio867       med=   119.4ms files=  867 +127740 -24088
+GIT libuv495       med=    96.4ms files=  496 +80230 -23972
+GIT stress2000     med=    65.4ms files= 2000 +4000 -0
+GIT stressgiant    med=    68.5ms files= 2002 +44000 -0
+  COLD rg91           rep0     70.2ms files=91 +3607 -1073
+  COLD rg252          rep0     36.0ms files=252 +72442 -21356
+  COLD tokio867       rep0     51.7ms files=867 +127896 -24244
+  COLD libuv495       rep0     35.5ms files=495 +80354 -24096
+  COLD stress2000     rep0     32.4ms files=2000 +4000 -0
+  COLD stressgiant    rep0     10.3ms files=2002 +44000 -0
+  DISK rg91           rep0     63.1ms
+  DISK rg252          rep0     17.0ms
+  DISK tokio867       rep0     18.5ms
+  DISK libuv495       rep0     15.4ms
+  DISK stress2000     rep0      3.1ms
+  DISK stressgiant    rep0      1.9ms
+  COLD rg91           rep1     67.5ms files=91 +3607 -1073
+  COLD rg252          rep1     44.1ms files=252 +72442 -21356
+  COLD tokio867       rep1     33.7ms files=867 +127896 -24244
+  COLD libuv495       rep1     47.1ms files=495 +80354 -24096
+  COLD stress2000     rep1     36.2ms files=2000 +4000 -0
+  COLD stressgiant    rep1     12.8ms files=2002 +44000 -0
+  DISK rg91           rep1     64.0ms
+  DISK rg252          rep1     19.1ms
+  DISK tokio867       rep1     16.8ms
+  DISK libuv495       rep1     14.7ms
+  DISK stress2000     rep1     15.1ms
+  DISK stressgiant    rep1     13.7ms
+  COLD rg91           rep2     56.0ms files=91 +3607 -1073
+  COLD rg252          rep2     28.6ms files=252 +72442 -21356
+  COLD tokio867       rep2     33.4ms files=867 +127896 -24244
+  COLD libuv495       rep2     35.9ms files=495 +80354 -24096
+  COLD stress2000     rep2     35.5ms files=2000 +4000 -0
+  COLD stressgiant    rep2     11.6ms files=2002 +44000 -0
+  DISK rg91           rep2     62.5ms
+  DISK rg252          rep2      1.4ms
+  DISK tokio867       rep2     16.7ms
+  DISK libuv495       rep2     14.7ms
+  DISK stress2000     rep2      3.3ms
+  DISK stressgiant    rep2     25.9ms
+  COLD rg91           rep3     56.9ms files=91 +3607 -1073
+  COLD rg252          rep3     33.5ms files=252 +72442 -21356
+  COLD tokio867       rep3     30.4ms files=867 +127896 -24244
+  COLD libuv495       rep3     24.5ms files=495 +80354 -24096
+  COLD stress2000     rep3     46.6ms files=2000 +4000 -0
+  COLD stressgiant    rep3     36.1ms files=2002 +44000 -0
+  DISK rg91           rep3     67.0ms
+  DISK rg252          rep3     17.9ms
+  DISK tokio867       rep3      3.2ms
+  DISK libuv495       rep3     13.9ms
+  DISK stress2000     rep3      2.8ms
+  DISK stressgiant    rep3     26.7ms
+  COLD rg91           rep4     53.1ms files=91 +3607 -1073
+  COLD rg252          rep4     37.1ms files=252 +72442 -21356
+  COLD tokio867       rep4     48.8ms files=867 +127896 -24244
+  COLD libuv495       rep4     39.2ms files=495 +80354 -24096
+  COLD stress2000     rep4     33.4ms files=2000 +4000 -0
+  COLD stressgiant    rep4     29.4ms files=2002 +44000 -0
+  DISK rg91           rep4     43.3ms
+  DISK rg252          rep4     13.4ms
+  DISK tokio867       rep4     18.1ms
+  DISK libuv495       rep4     15.2ms
+  DISK stress2000     rep4     15.1ms
+  DISK stressgiant    rep4      1.4ms
+  COLD rg91           rep5     56.9ms files=91 +3607 -1073
+  COLD rg252          rep5     19.4ms files=252 +72442 -21356
+  COLD tokio867       rep5     31.8ms files=867 +127896 -24244
+  COLD libuv495       rep5     24.0ms files=495 +80354 -24096
+  COLD stress2000     rep5     33.6ms files=2000 +4000 -0
+  COLD stressgiant    rep5     11.5ms files=2002 +44000 -0
+  DISK rg91           rep5     51.0ms
+  DISK rg252          rep5     11.2ms
+  DISK tokio867       rep5     17.5ms
+  DISK libuv495       rep5     14.7ms
+  DISK stress2000     rep5     16.3ms
+  DISK stressgiant    rep5     13.7ms
+  COLD rg91           rep6     70.2ms files=91 +3607 -1073
+  COLD rg252          rep6     20.2ms files=252 +72442 -21356
+  COLD tokio867       rep6     31.1ms files=867 +127896 -24244
+  COLD libuv495       rep6     43.2ms files=495 +80354 -24096
+  COLD stress2000     rep6     53.6ms files=2000 +4000 -0
+  COLD stressgiant    rep6     22.8ms files=2002 +44000 -0
+  DISK rg91           rep6     56.1ms
+  DISK rg252          rep6     20.4ms
+  DISK tokio867       rep6     18.1ms
+  DISK libuv495       rep6     15.0ms
+  DISK stress2000     rep6      4.0ms
+  DISK stressgiant    rep6      1.4ms
+  COLD rg91           rep7     71.1ms files=91 +3607 -1073
+  COLD rg252          rep7     20.7ms files=252 +72442 -21356
+  COLD tokio867       rep7     33.4ms files=867 +127896 -24244
+  COLD libuv495       rep7     36.9ms files=495 +80354 -24096
+  COLD stress2000     rep7     33.8ms files=2000 +4000 -0
+  COLD stressgiant    rep7     12.1ms files=2002 +44000 -0
+  DISK rg91           rep7     59.8ms
+  DISK rg252          rep7     15.7ms
+  DISK tokio867       rep7     17.2ms
+  DISK libuv495       rep7     15.3ms
+  DISK stress2000     rep7     15.4ms
+  DISK stressgiant    rep7     13.7ms
+  COLD rg91           rep8     69.5ms files=91 +3607 -1073
+  COLD rg252          rep8     51.0ms files=252 +72442 -21356
+  COLD tokio867       rep8     35.2ms files=867 +127896 -24244
+  COLD libuv495       rep8     36.1ms files=495 +80354 -24096
+  COLD stress2000     rep8     32.9ms files=2000 +4000 -0
+  COLD stressgiant    rep8     26.7ms files=2002 +44000 -0
+  DISK rg91           rep8     48.9ms
+  DISK rg252          rep8     24.5ms
+  DISK tokio867       rep8      4.1ms
+  DISK libuv495       rep8     14.1ms
+  DISK stress2000     rep8     14.8ms
+  DISK stressgiant    rep8     13.6ms
+  WARM rg91           n=200 med=   0.12ms min=   0.11 max=   0.27
+  WARM rg252          n=200 med=   0.12ms min=   0.11 max=   0.26
+  WARM tokio867       n=200 med=   0.15ms min=   0.14 max=   0.31
+  WARM libuv495       n=200 med=   0.13ms min=   0.11 max=   0.31
+  WARM stress2000     n=200 med=   0.16ms min=   0.15 max=   0.29
+  WARM stressgiant    n=200 med=   0.16ms min=   0.16 max=   0.25
+
+=== SUMMARY (medians) ===
+range                 git       cold       disk       warm  cold/git  warm/git
+rg91                 47.3       67.5       59.8       0.12      0.70     406.5
+rg252                68.4       33.5       17.0       0.12      2.04     566.0
+tokio867            119.4       33.4       17.2       0.15      3.58     788.5
+libuv495             96.4       36.1       14.7       0.13      2.67     745.6
+stress2000           65.4       33.8       14.8       0.16      1.93     410.7
+stressgiant          68.5       12.8       13.7       0.16      5.34     429.9
+
+# ============================================================================
+# FINAL re-measurement 2026-10-16 — the numbers quoted in docs/BENCHMARKS.md
+# Device: AMD Ryzen 7 7735HS (8C/16T), Windows 11, git 2.49.0, release binary.
+# Cold/disk are MEDIAN OF 3 PASSES (bench/multipass.py --passes 3 --reps 5).
+# A single pass is bimodal (up to 2x swing) and must not be quoted.
+# ============================================================================
+
+# git wall vs git internal (bench/git_internal.py --reps 9)
+range            wall    internal   spawn
+rg91             50.3m     20.0m     30.3m
+rg252            67.6m     39.0m     28.6m
+tokio867        120.9m     90.3m     30.6m
+libuv495         96.5m     67.0m     29.4m
+stress2000       64.8m     36.7m     28.1m
+stressgiant      70.4m     40.8m     29.6m
+million_add1M   122.0m     93.9m     28.0m
+million_mod500k 108.2m     80.5m     27.6m
+
+# XLR8 16 threads (multipass, median of 3 passes)  cold min..max = spread across passes
+range                 git      cold med   cold min..max    disk med   warm med
+rg91                 47.4      65.9      54.6..72.6        46.6       0.12
+rg252                67.9      27.9      21.8..33.5        20.7       0.13
+tokio867            118.7      43.3      40.4..44.3        17.3       0.16
+libuv495             95.8      37.2      26.8..38.1        15.1       0.13
+stress2000           63.2      33.5      32.4..37.1        15.3       0.18
+stressgiant          67.5      25.7      11.2..27.1        14.1       0.17
+million_add1M       121.1      68.3      61.6..71.3        56.7       0.18
+million_mod500k     107.3      31.3      29.9..36.7        21.4       0.17
+
+# XLR8 1 thread (XLR8_THREADS=1, multipass, median of 3 passes)
+range                 git      cold med   cold min..max    disk med   warm med
+rg91                 45.7      67.6      64.3..81.5        62.6       0.12
+rg252                69.4      44.8      43.9..51.0        18.4       0.13
+tokio867            122.0     108.5     107.0..114.7        17.4       0.16
+libuv495             97.9      80.2      72.8..87.6        15.4       0.13
+stress2000           65.1     205.4     205.3..224.2        15.4       0.18
+stressgiant          71.5      38.6      27.4..42.0        14.1       0.17
+million_add1M       120.7     120.2     120.1..121.6        58.7       0.16
+million_mod500k     108.3      87.6      82.6..93.5         1.7       0.15
+
+# Correctness cross-check (this session, vs git diff --numstat -M)
+range             git files/+/-              xlr8 files/+/-             renames
+rg91              91/+3603/-1069             91/+3607/-1073             1 / 1
+rg252            252/+72431/-21345          252/+72442/-21356           2 / 2
+tokio867         867/+127740/-24088         867/+127896/-24244          29 / 29 (pair-identical)
+libuv495         496/+80230/-23972          495/+80354/-24096           16 / 17
+stress2000      2000/+4000/-0              2000/+4000/-0               -
+stressgiant     2002/+44000/-0             2002/+44000/-0              -
+million_add1M   2500/+1000000/-0           2500/+1000000/-0            -
+million_mod500k 1250/+250000/-250000       1250/+250000/-250000        -

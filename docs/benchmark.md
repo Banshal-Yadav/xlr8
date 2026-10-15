@@ -173,12 +173,16 @@ valid scripts; only an xdiff port could match byte-for-byte.
 | tokio `1.50.0..1.53.2` | +11 505 / −2 097 | +11 496 / −2 088 | +9 / +9 | 298 = 298 |
 
 **libuv's ±1 file**: our detector pairs `samples/socks5-proxy/util.c →
-src/win/snprintf.c` (sim 0.509) which git never does, and swaps
-`atomicops-inl.h` to `no-proctitle.c` instead of git's `test-uname.c` (git
-scores: 50–51 vs `<50` for the other candidate; ours: ~0.502 for both). Both
-are **0.5-threshold boundary cases** where git's xdl byte accounting lands
-1–3 points below our line-exact common. git itself only pairs `util.c` at
-`-M48`, never at default `-M50`. Not chased further.
+src/win/snprintf.c` which git never does, and swaps `atomicops-inl.h` to
+`no-proctitle.c` instead of git's `test-uname.c`. **These are near-ties, not
+0.5-threshold cases** (corrected 2026-10-16; the earlier `~0.502` figures were
+from a superseded line-based formula — the scorer is byte-weighted, `sim =
+(len_dest − removed_bytes) / max(len_dest, len_src)` in `src/rewrite.rs`).
+Against source `atomicops-inl.h` (2171 B), our pick scores 16+/27− ⇒ `sim ≈
+0.9876` and git's pick scores 41+/28− ⇒ `sim ≈ 0.9871` — both far above the 0.5
+gate and ~0.0005 apart. git's spanhash estimate orders them the other way.
+Impact: 1 file in 496 (0.2%), one pair reported as rename+add rather than
+rename+rename. Not chased further.
 
 **Over-limit ranges** (git.git `v1.0.0..v2.50.0`, `v2.0.0..v2.50.0`): git
 gives up on fuzzy renames entirely (`renameLimit … at least 4506/2514`
