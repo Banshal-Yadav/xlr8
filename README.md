@@ -34,7 +34,7 @@ xlr8 owner/repo
 
 ## Install
 
-**Download a prebuilt binary** from [Releases](https://github.com/Banshal-Yadav/xlr8/releases) (**Windows, Linux x86_64**), unzip / untar, and run `xlr8 owner/repo`.
+**Download a prebuilt binary** from [Releases](https://github.com/Banshal-Yadav/xlr8/releases) (**Windows and Linux, x86_64 and aarch64**), unzip / untar, and run `xlr8 owner/repo`.
 
 **Or build from source:**
 
@@ -45,7 +45,8 @@ cargo build --release
 ```
 
 Binary: `target/release/xlr8` (~5 MB). Requires the Rust toolchain ([rustup](https://rustup.rs)).
-Other platforms (macOS, ARM/Termux): build from source.
+Other platforms (macOS, Android/Termux): build from source. Prebuilt binaries
+cover x86_64 and aarch64 on both Windows and Linux.
 
 ## Usage
 

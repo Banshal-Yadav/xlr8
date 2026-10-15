@@ -11,26 +11,41 @@ permissions:
 jobs:
   build:
     strategy:
+      # an ARM runner wobble must not take down the x86_64 release
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-22.04
             name: linux-x86_64
+            target: x86_64-unknown-linux-gnu
           - os: windows-latest
             name: windows-x86_64
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-24.04-arm
+            name: linux-aarch64
+            target: aarch64-unknown-linux-gnu
+          - os: windows-11-arm
+            name: windows-aarch64
+            target: aarch64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      # all four targets are Tier 1 with host tools, so every job builds natively
+      # on its own runner — no cross-compilation or extra linkers needed
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --release --locked
+        with:
+          targets: ${{ matrix.target }}
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      # `--target` nests output under the triple, so package from there
       - name: Package (linux)
         if: runner.os == 'Linux'
         run: |
-          tar -czf xlr8-${{ github.ref_name }}-${{ matrix.name }}.tar.gz -C target/release xlr8
+          tar -czf xlr8-${{ github.ref_name }}-${{ matrix.name }}.tar.gz -C target/${{ matrix.target }}/release xlr8
       - name: Package (windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Compress-Archive -Path target/release/xlr8.exe -DestinationPath xlr8-${{ github.ref_name }}-${{ matrix.name }}.zip
+          Compress-Archive -Path target/${{ matrix.target }}/release/xlr8.exe -DestinationPath xlr8-${{ github.ref_name }}-${{ matrix.name }}.zip
       - uses: softprops/action-gh-release@v2
         with:
           files: |
