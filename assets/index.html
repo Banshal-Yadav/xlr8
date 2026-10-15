@@ -425,7 +425,22 @@
     font-weight: 600;
     display: none;
     z-index: 60;
+    max-width: 46vw;
   }
+  #toast.err { background: var(--del); color: #fff; }
+  #toast.spin::before {
+    content: "";
+    display: inline-block;
+    width: 9px; height: 9px;
+    margin-right: 8px;
+    border: 2px solid rgba(0,0,0,0.3);
+    border-top-color: #000;
+    border-radius: 50%;
+    vertical-align: -1px;
+    animation: tspin 0.7s linear infinite;
+  }
+  #toast.err.spin::before { border-color: rgba(255,255,255,0.45); border-top-color: #fff; }
+  @keyframes tspin { to { transform: rotate(360deg); } }
   .empty {
     padding: 40px;
     text-align: center;
@@ -528,7 +543,17 @@
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", 2600); };
+// sticky: keep showing until replaced (a clone outlasts the 2.6 s default hide)
+// spin: work in progress; err: red + shown longer so failures are not missed
+const toast = (msg, opts = {}) => {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  t.classList.toggle("spin", !!opts.spin);
+  t.classList.toggle("err", !!opts.error);
+  clearTimeout(t._h);
+  if (!opts.sticky) t._h = setTimeout(() => { t.style.display = "none"; t.classList.remove("spin", "err"); }, opts.ms || (opts.error ? 8000 : 2600));
+};
 const fmtBytes = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : b >= 1024 ? (b / 1024).toFixed(1) + " KB" : b + " B";
 const fmtDur = (s) => s < 60 ? s + "s" : s < 3600 ? Math.floor(s / 60) + "m" : s < 86400 ? Math.floor(s / 3600) + "h" : Math.floor(s / 86400) + "d";
 const fmtRel = (ts) => { const d = Math.max(0, Math.floor(Date.now() / 1000) - ts); return fmtDur(d) + " ago"; };
@@ -966,23 +991,26 @@ async function refreshRepos(selectRepo) {
   const prev = selectRepo || sel.value || S.repo;
   sel.innerHTML = "";
   repos.forEach(r => { const o = document.createElement("option"); o.value = r; o.textContent = r; sel.appendChild(o); });
-  if (!repos.length) { $("#side-body").innerHTML = '<div class="empty">No repositories yet.<br><br>Click <b>+</b> above, or run <b>xlr8 owner/repo</b> on the CLI.<br><br>Paste <b>owner/repo</b> or a GitHub URL to clone one.</div>'; return; }
+  if (!repos.length) { $("#side-body").innerHTML = '<div class="empty">No repositories yet.<br><br>Click <b>+</b> above, or run <b>xlr8 owner/repo</b> on the CLI.<br><br>Paste <b>owner/repo</b> or a GitHub URL to clone one.</div>'; return false; }
   const h = loadHash();
   S.repo = (prev && repos.includes(prev)) ? prev : (h.repo && repos.includes(h.repo)) ? h.repo : repos[0];
   sel.value = S.repo;
-  await onRepoChange({ ...h, repo: S.repo });
+  return onRepoChange({ ...h, repo: S.repo }); // resolves false if the repo failed to load
 }
 $("#repo-select").onchange = (e) => { S.repo = e.target.value; S.path = null; S.dir = ""; onRepoChange({ repo: S.repo }); };
 $("#sync-btn").onclick = async () => {
   if (!S.repo) return;
-  toast("syncing...");
+  const btn = $("#sync-btn");
+  btn.disabled = true;
+  toast("syncing " + S.repo + "…", { sticky: true, spin: true });
   try {
     const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ repo: S.repo }) });
-    if (!r.ok) throw new Error((await r.text().catch(() => "")) || r.status);
-    toast("synced");
+    if (!r.ok) throw new Error((await r.text().catch(() => "")).trim() || ("HTTP " + r.status));
+    toast("loading " + S.repo + "…", { sticky: true, spin: true });
     treeCache.clear(); blobCache.clear(); metaCache.clear(); filesCache = null; expanded.clear(); pal.all = null; pal.lc = null;
-    await onRepoChange();
-  } catch (e) { toast("sync failed: " + e); }
+    if (await onRepoChange()) toast("synced");
+  } catch (e) { toast("sync failed: " + (e.message || e), { error: true }); }
+  finally { btn.disabled = false; }
 };
 
 /* ── add repo (clone from the web UI, same path as the CLI) ── */
@@ -998,20 +1026,26 @@ async function addRepo() {
   if (!val) return;
   const btn = $("#add-repo-btn");
   btn.disabled = true;
-  toast("cloning " + val + "...");
+  // sticky: a clone can take minutes; the 2.6 s auto-hide cleared the spinner
+  // while the request was still in flight
+  toast("cloning " + val + "…", { sticky: true, spin: true });
   try {
     const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ repo: val }) });
     const txt = await r.text().catch(() => "");
-    if (!r.ok) throw new Error(txt || r.status);
+    if (!r.ok) throw new Error(txt.trim() || ("HTTP " + r.status));
     let canonical = null;
     try { canonical = JSON.parse(txt).repo; } catch { /* older server: fall back to raw input */ }
     inp.value = "";
     $("#side-add").style.display = "none";
-    toast("cloned " + (canonical || val));
+    // clone landed, but the repo still has to open (refs + tree) before it is
+    // usable — keep spinning or the spinner dies before the view appears
+    toast("loading " + (canonical || val) + "…", { sticky: true, spin: true });
     treeCache.clear(); blobCache.clear(); metaCache.clear(); filesCache = null; expanded.clear(); pal.all = null; pal.lc = null;
-    await refreshRepos(canonical);
-  } catch (e) { toast("add failed: " + e); }
-  finally { btn.disabled = false; }
+    if (await refreshRepos(canonical)) toast("ready: " + (canonical || val));
+  } catch (e) {
+    // leave the box open with the text so the user can fix and retry
+    toast(String(e.message || e), { error: true });
+  } finally { btn.disabled = false; }
 }
 $("#add-repo-input").addEventListener("keydown", (e) => {
   e.stopPropagation(); // keep global shortcuts (Ctrl+P, 1-5) out of the field
@@ -1050,7 +1084,8 @@ async function onRepoChange(h = {}) {
     else if (S.tab === "search" && searchState.lastQ) doSearch();
     else if (S.tab === "commits") loadCommits();
     else if (S.tab === "compare" && S.base && S.head) runDiff();
-  } catch (e) { toast("repo load failed: " + e); }
+  } catch (e) { toast("repo load failed: " + e, { error: true }); return false; }
+  return true;
 }
 
 /* ═══════════════ sidebar (per tab) ═══════════════ */

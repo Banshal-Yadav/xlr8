@@ -377,7 +377,9 @@ async fn sync_repo(Json(req): Json<SyncReq>) -> Result<Json<SyncResp>, (StatusCo
     let path = tokio::task::spawn_blocking(move || mirror::sync(&clone))
         .await
         .map_err(|e| api_err(e.into()))?
-        .map_err(api_err)?;
+        // clone/fetch failures are upstream (github unreachable, repo missing,
+        // auth) → 502 with git's real reason, not a bare 500
+        .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
     crate::repo::invalidate(&path);
     note_sync();
     Ok(Json(SyncResp {

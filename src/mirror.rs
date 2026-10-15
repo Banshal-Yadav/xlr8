@@ -118,30 +118,85 @@ pub fn sync(repo: &RepoRef) -> Result<PathBuf> {
     Ok(path)
 }
 
+/// Network guard: abort a transfer that stalls (GitHub down, captive portal,
+/// dropped connection) instead of hanging the request forever. A hard
+/// wall-clock kill would also kill legitimately large clones; low-speed
+/// detection only trips on transfers that have genuinely stopped moving.
+const LOW_SPEED_LIMIT: &str = "1000"; // bytes/s
+const LOW_SPEED_TIME: &str = "30"; // seconds
+
+/// git with prompts disabled — a credential prompt on a headless server would
+/// block the request forever, which is the usual "GitHub is down" hang.
+fn git() -> Command {
+    let mut c = Command::new("git");
+    c.env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_HTTP_LOW_SPEED_LIMIT", LOW_SPEED_LIMIT)
+        .env("GIT_HTTP_LOW_SPEED_TIME", LOW_SPEED_TIME);
+    c
+}
+
+/// Run to completion, capturing stderr so the caller can surface the real
+/// reason (the old `.status()` let it reach the server console and reported a
+/// generic "git clone failed" for every distinct failure).
+fn run(mut cmd: Command, repo: &RepoRef) -> Result<()> {
+    let out = cmd.output().context("spawn git")?;
+    if out.status.success() {
+        return Ok(());
+    }
+    bail!("{}", explain(&String::from_utf8_lossy(&out.stderr), repo));
+}
+
 fn clone_mirror(repo: &RepoRef, dest: &PathBuf) -> Result<()> {
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    crate::info!("cloning mirror {}", repo.canonical());
-    let status = Command::new("git")
-        .args(["clone", "--mirror", "-q", &repo.https_url()])
-        .arg(dest)
-        .status()
-        .context("spawn git clone")?;
-    if !status.success() {
-        bail!("git clone failed for {}", repo.canonical());
+    // a previous attempt that died mid-clone (or a directory someone dropped
+    // here) makes `git clone` refuse the target; clear it so retry works.
+    // HEAD is the "this mirror is usable" marker the rest of the crate checks.
+    if dest.exists() && !dest.join("HEAD").exists() {
+        crate::warn!("removing partial mirror {}", dest.display());
+        std::fs::remove_dir_all(dest)
+            .with_context(|| format!("clear partial mirror {}", dest.display()))?;
     }
-    Ok(())
+    crate::info!("cloning mirror {}", repo.canonical());
+    let mut cmd = git();
+    cmd.args(["clone", "--mirror", "-q", &repo.https_url()])
+        .arg(dest);
+    run(cmd, repo)
 }
 
 fn fetch(repo: &RepoRef, mirror: &PathBuf) -> Result<()> {
-    let status = Command::new("git")
-        .args(["fetch", "--all", "--prune", "-q"])
-        .current_dir(mirror)
-        .status()
-        .context("spawn git fetch")?;
-    if !status.success() {
-        bail!("git fetch failed for {}", repo.canonical());
+    let mut cmd = git();
+    cmd.args(["fetch", "--all", "--prune", "-q"])
+        .current_dir(mirror);
+    run(cmd, repo)
+}
+
+/// Map git's stderr onto one actionable line. The web UI shows this verbatim,
+/// so the common failure modes get a real explanation.
+fn explain(stderr: &str, repo: &RepoRef) -> String {
+    let s = stderr.to_ascii_lowercase();
+    let name = repo.canonical();
+    if s.contains("could not resolve host") || s.contains("name or service not known") {
+        return format!("{name}: cannot reach github — DNS lookup failed (offline?)");
     }
-    Ok(())
+    if s.contains("failed to connect") || s.contains("connection timed out") || s.contains("operation timed out") {
+        return format!("{name}: cannot connect to github — connection timed out");
+    }
+    if s.contains("low speed") || s.contains("remote end hung up") || s.contains("early eof") {
+        return format!("{name}: transfer stalled or dropped by github");
+    }
+    if s.contains("repository not found") || s.contains("does not appear to be a git repository") {
+        return format!("{name}: repository not found (check the name, or it is private)");
+    }
+    if s.contains("could not read from remote repository") || s.contains("authentication failed") {
+        return format!("{name}: access denied — private repo and no credentials configured");
+    }
+    if s.contains("empty repository") || s.contains("no branches") {
+        return format!("{name}: repository has no commits yet");
+    }
+    match stderr.lines().rev().map(str::trim).find(|l| !l.is_empty()) {
+        Some(l) => format!("{name}: {}", l.trim_start_matches("fatal: ")),
+        None => format!("{name}: git exited with an error"),
+    }
 }

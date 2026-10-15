@@ -35,7 +35,13 @@ AGENT.md         this file (project guide for AI agents)
 src/main.rs      CLI (hand-rolled, no clap), startup, serve loop
 src/cli.rs       arg parsing + usage text
 src/mirror.rs    RepoRef parse (URL or owner/repo), clone/fetch (shells out
-                 to git), cache_dir(), cached_repos()
+                 to git), cached_repos, cache_dir. POST /api/sync takes
+                 owner/repo or a GitHub URL and returns the canonical name;
+                 400 = unparseable input, 502 = upstream failure (github down,
+                 repo missing/private, stalled transfer) with git's real reason
+                 in the body. git runs with GIT_TERMINAL_PROMPT=0 and a
+                 low-speed abort so a hung transfer can't block the request
+                 forever; a partial mirror dir (no HEAD) is cleared pre-retry.
 src/repo.rs      Arc<ThreadSafeRepository> cache + blob-byte cache (memo,
                  64 MB, invalidate on pull)
 src/log.rs       info!/warn!/debug! logging (debug = phase timings,
