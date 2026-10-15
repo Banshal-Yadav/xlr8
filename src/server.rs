@@ -365,17 +365,25 @@ struct SyncReq {
 #[derive(Serialize)]
 struct SyncResp {
     ok: bool,
+    /// canonical `owner/name` — lets the UI select a repo it just cloned
+    repo: String,
 }
 
 async fn sync_repo(Json(req): Json<SyncReq>) -> Result<Json<SyncResp>, (StatusCode, String)> {
-    let repo = mirror::RepoRef::parse(&req.repo).map_err(api_err)?;
-    let path = tokio::task::spawn_blocking(move || mirror::sync(&repo))
+    // bad repo syntax is caller error (the web UI add-repo box) → 400, not 500
+    let repo = mirror::RepoRef::parse(&req.repo).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let canonical = repo.canonical();
+    let clone = repo.clone();
+    let path = tokio::task::spawn_blocking(move || mirror::sync(&clone))
         .await
         .map_err(|e| api_err(e.into()))?
         .map_err(api_err)?;
     crate::repo::invalidate(&path);
     note_sync();
-    Ok(Json(SyncResp { ok: true }))
+    Ok(Json(SyncResp {
+        ok: true,
+        repo: canonical,
+    }))
 }
 
 #[derive(Serialize)]

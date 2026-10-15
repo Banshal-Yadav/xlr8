@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>xlr8</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0a'/><path d='M4 3l5 5-5 5' stroke='%23cbb0f7' stroke-width='2' fill='none'/></svg>">
 <style>
   :root {
     --bg0: #0a0a0a;
@@ -486,7 +487,11 @@
     <div class="side-head">
       <span class="side-title" id="side-title">Explorer</span>
       <select id="repo-select" style="flex:1;min-width:0" title="repository"></select>
+      <button id="add-repo-btn" title="clone a repo by owner/name or URL">+</button>
       <button id="sync-btn" title="fetch from origin">SYNC</button>
+    </div>
+    <div id="side-add" style="display:none;padding:6px 8px;border-bottom:1px solid var(--bd)">
+      <input id="add-repo-input" type="text" placeholder="owner/repo or github URL" spellcheck="false" autocomplete="off" style="width:100%">
     </div>
     <div id="side-sub" class="side-head" style="display:none"></div>
     <div id="side-body" class="side-body"></div>
@@ -602,18 +607,30 @@ class VScroll {
     this.renderRow = null;
     this.cache = new Map();
     this.overscan = 30;
-    this._onScroll = () => this.paint();
+    this._lastI = -1;      // last painted row range — guards redundant innerHTML
+    this._lastJ = -1;
+    this._raf = 0;
+    this._onScroll = () => this.schedule();
     container.addEventListener("scroll", this._onScroll, { passive: true });
   }
   destroy() {
     this.c.removeEventListener("scroll", this._onScroll);
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this._raf = 0;
     this.c.innerHTML = "";
+  }
+  /// coalesce scroll events to one paint per frame (browsers fire many per frame)
+  schedule() {
+    if (this._raf) return;
+    this._raf = requestAnimationFrame(() => { this._raf = 0; this.paint(); });
   }
   setRows(n, renderRow, tops) {
     this.n = n;
     this.renderRow = renderRow;
     this.tops = tops || null;
     this.cache.clear();
+    this._lastI = -1;
+    this._lastJ = -1;
     const total = tops ? tops[n] : n * this.rowH;
     this.c.innerHTML = '<div class="vinner" style="height:' + total + 'px;min-height:' + total + 'px"></div>';
     this.inner = this.c.firstElementChild;
@@ -622,7 +639,7 @@ class VScroll {
     this.paint();
   }
   topOf(i) { return this.tops ? this.tops[i] : i * this.rowH; }
-  paint() {
+  paint(force) {
     if (!this.renderRow || !this.inner || !this.c.isConnected) return;
     const st = this.c.scrollTop, h = this.c.clientHeight || 600; // fallback if not laid out yet
     const find = (x) => {
@@ -633,6 +650,11 @@ class VScroll {
     };
     const i = Math.max(0, find(st) - this.overscan);
     const j = Math.min(this.n, find(st + h) + this.overscan + 1);
+    // same rows already in the DOM → skip the rebuild entirely (scroll within a
+    // row, or a settimeout/rAF duplicate); avoids re-parsing ~70 rows per event
+    if (!force && i === this._lastI && j === this._lastJ) return;
+    this._lastI = i;
+    this._lastJ = j;
     let html = "";
     for (let k = i; k < j; k++) html += this.row(k);
     this.inner.innerHTML = html;
@@ -938,29 +960,64 @@ addEventListener("hashchange", () => {
 });
 
 /* ═══════════════ repos / refs ═══════════════ */
-async function refreshRepos() {
+async function refreshRepos(selectRepo) {
   const { repos } = await api("/api/repos");
   const sel = $("#repo-select");
+  const prev = selectRepo || sel.value || S.repo;
   sel.innerHTML = "";
   repos.forEach(r => { const o = document.createElement("option"); o.value = r; o.textContent = r; sel.appendChild(o); });
-  if (!repos.length) { $("#side-body").innerHTML = '<div class="empty">No repositories yet.<br><br><b>xlr8 owner/repo</b> on the CLI to open one.</div>'; return; }
+  if (!repos.length) { $("#side-body").innerHTML = '<div class="empty">No repositories yet.<br><br>Click <b>+</b> above, or run <b>xlr8 owner/repo</b> on the CLI.<br><br>Paste <b>owner/repo</b> or a GitHub URL to clone one.</div>'; return; }
   const h = loadHash();
-  S.repo = (h.repo && repos.includes(h.repo)) ? h.repo : repos[0];
+  S.repo = (prev && repos.includes(prev)) ? prev : (h.repo && repos.includes(h.repo)) ? h.repo : repos[0];
   sel.value = S.repo;
-  await onRepoChange(h);
+  await onRepoChange({ ...h, repo: S.repo });
 }
 $("#repo-select").onchange = (e) => { S.repo = e.target.value; S.path = null; S.dir = ""; onRepoChange({ repo: S.repo }); };
 $("#sync-btn").onclick = async () => {
   if (!S.repo) return;
-  toast("syncing…");
+  toast("syncing...");
   try {
     const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ repo: S.repo }) });
     if (!r.ok) throw new Error((await r.text().catch(() => "")) || r.status);
     toast("synced");
-  treeCache.clear(); blobCache.clear(); metaCache.clear(); filesCache = null; expanded.clear(); pal.all = null; pal.lc = null;
-  await onRepoChange();
+    treeCache.clear(); blobCache.clear(); metaCache.clear(); filesCache = null; expanded.clear(); pal.all = null; pal.lc = null;
+    await onRepoChange();
   } catch (e) { toast("sync failed: " + e); }
 };
+
+/* ── add repo (clone from the web UI, same path as the CLI) ── */
+$("#add-repo-btn").onclick = () => {
+  const box = $("#side-add");
+  const open = box.style.display === "none";
+  box.style.display = open ? "block" : "none";
+  if (open) $("#add-repo-input").focus();
+};
+async function addRepo() {
+  const inp = $("#add-repo-input");
+  const val = inp.value.trim();
+  if (!val) return;
+  const btn = $("#add-repo-btn");
+  btn.disabled = true;
+  toast("cloning " + val + "...");
+  try {
+    const r = await fetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ repo: val }) });
+    const txt = await r.text().catch(() => "");
+    if (!r.ok) throw new Error(txt || r.status);
+    let canonical = null;
+    try { canonical = JSON.parse(txt).repo; } catch { /* older server: fall back to raw input */ }
+    inp.value = "";
+    $("#side-add").style.display = "none";
+    toast("cloned " + (canonical || val));
+    treeCache.clear(); blobCache.clear(); metaCache.clear(); filesCache = null; expanded.clear(); pal.all = null; pal.lc = null;
+    await refreshRepos(canonical);
+  } catch (e) { toast("add failed: " + e); }
+  finally { btn.disabled = false; }
+}
+$("#add-repo-input").addEventListener("keydown", (e) => {
+  e.stopPropagation(); // keep global shortcuts (Ctrl+P, 1-5) out of the field
+  if (e.key === "Enter") { e.preventDefault(); addRepo(); }
+  if (e.key === "Escape") { e.preventDefault(); e.target.value = ""; e.target.blur(); $("#side-add").style.display = "none"; }
+});
 
 async function onRepoChange(h = {}) {
   const sameRepo = !h.repo; // called with no explicit repo change = sync (same repo)
@@ -1093,7 +1150,7 @@ function renderSide() {
     $("#base-ref").onchange = (e) => { S.base = e.target.value; saveHash(); };
     $("#head-ref").onchange = (e) => { S.head = e.target.value; saveHash(); };
     $("#diff-btn").onclick = runDiff;
-    $("#diff-filter").addEventListener("input", () => { if (diffState.files) renderDiffSide(); });
+    $("#diff-filter").addEventListener("input", debounce(() => { if (diffState.files) renderDiffSide(); }, 90));
     body.innerHTML = '<div id="diff-side"></div>';
     if (diffState.summary) renderDiffSide();
   } else if (S.tab === "pulls") {
@@ -1111,13 +1168,13 @@ function fillRefSelect(sel, val) {
 function debounce(fn, ms) { let h; return (...a) => { clearTimeout(h); h = setTimeout(() => fn(...a), ms); }; }
 
 /* ═══════════════ file tree ═══════════════ */
-async function loadTree(dir) {
+async function loadTree(dir, quiet) {
   const key = dir;
-  if (treeCache.has(key)) { renderTree(); return; }
+  if (treeCache.has(key)) { if (!quiet) renderTree(); return; }
   try {
     const r = await api(`/api/${S.repo}/tree?ref=${encodeURIComponent(S.ref)}&path=${encodeURIComponent(dir)}`);
     treeCache.set(key, r.entries);
-    renderTree();
+    if (!quiet) renderTree();
   } catch (e) {
     const el = $("#tree");
     if (el) el.innerHTML = `<div class="empty">${esc(String(e))}</div>`;
@@ -1246,16 +1303,30 @@ async function revealPath(path) {
   const tf = $("#tree-filter");
   if (tf && tf.value) { tf.value = ""; }
   const parts = path.split("/");
+  let changed = false;
   for (let i = 1; i < parts.length; i++) {
     const dir = parts.slice(0, i).join("/");
     if (!expanded.has(dir)) {
       expanded.add(dir);
-      await loadTree(dir);
+      changed = true;
+      await loadTree(dir, true); // quiet: revealPath renders once at the end
     }
   }
-  renderTree();
+  // only rebuild the tree DOM when the visible structure actually changed;
+  // otherwise an in-place .sel toggle is enough (opening files back-to-back
+  // in a large tree was rebuilding the whole explorer each time)
+  if (changed) renderTree();
+  highlightTreeSel();
   const node = $(`#tree .tnode[data-file="${CSS.escape(path)}"]`);
   if (node) node.scrollIntoView({ block: "nearest" });
+}
+/// selection-only update: toggles .sel on tree nodes without rebuilding
+function highlightTreeSel() {
+  const el = $("#tree");
+  if (!el) return;
+  el.querySelectorAll(".tnode.sel").forEach(n => n.classList.remove("sel"));
+  const node = el.querySelector(`.tnode[data-file="${CSS.escape(S.path || "")}"]`);
+  if (node) node.classList.add("sel");
 }
 
 /* ═══════════════ main renderers ═══════════════ */
@@ -1300,7 +1371,8 @@ function renderFilesMain(tb, c, hb) {
         <div class="panel-h">Shortcuts</div>
         <div class="panel-b" style="display:flex;flex-direction:column;gap:6px">
           <div><kbd>Ctrl</kbd>+<kbd>P</kbd> quick open file</div>
-          <div><kbd>1</kbd>–<kbd>5</kbd> switch view</div>
+            <div><kbd>Ctrl</kbd>+<kbd>K</kbd> add / clone repo</div>
+            <div><kbd>1</kbd>–<kbd>5</kbd> switch view</div>
           <div><kbd>Ctrl</kbd>+<kbd>F</kbd> find (diff/file)</div>
           <div><kbd>/</kbd> focus filter / search</div>
           <div><kbd>j</kbd>/<kbd>k</kbd> move in lists</div>
@@ -1336,10 +1408,7 @@ async function openFile(path, opts = {}) {
   codeState.lines = null; // invalidate any in-flight repaint (binary/error/switch)
   saveHash(true);
   if (!wasFiles) { setTab("files", { silent: true }); return; } // re-enters renderFilesMain → openFile
-  // mark tree selection
-  $$("#tree .tnode.sel").forEach(n => n.classList.remove("sel"));
-  const node = $(`#tree .tnode[data-file="${CSS.escape(path)}"]`);
-  if (node) node.classList.add("sel");
+  highlightTreeSel(); // in-place .sel; revealPath only rebuilds when structure changes
   revealPath(path).catch(() => {});
 
   const tb = $("#toolbar"), c = $("#content"), hb = $("#hintbar");
@@ -1736,40 +1805,17 @@ function renderCompareMain(tb, c, hb) {
     <span class="mono">${esc(S.base || "?")}</span><span class="dim">…</span><span class="mono">${esc(S.head || "?")}</span>
     <span class="grow"></span>
     <input id="diff-find" type="search" placeholder="find in diff  (Ctrl+F)" style="width:160px">
-    <button id="diff-expand">EXPAND</button><button id="diff-collapse">CLEAR</button>
+    <button id="diff-collapse">CLEAR</button>
     <span class="dim num" id="diff-tbinfo">${esc(diffState.info)}</span>`;
   $("#diff-find").addEventListener("input", debounce(() => diffFind($("#diff-find").value.trim()), 180));
   $("#diff-find").addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); diffFindJump(e.shiftKey ? -1 : 1); }
     if (e.key === "Escape") { e.target.value = ""; diffFind(""); }
   });
-  $("#diff-expand").onclick = async () => {
-    const side = $("#diff-side");
-    if (!side) return;
-    const hs = [...side.querySelectorAll(".lrow[data-i]")];
-    const expandTok = ++diffState.tok; // own token: don't get killed by per-file loads
-    renderCompareMain._tok = expandTok;
-    // parallel with small concurrency; suppress per-file sidebar/detail rebuilds
-    const CONC = 4;
-    let idx = 0;
-    const worker = async () => {
-      while (idx < hs.length) {
-        if (diffState.tok !== expandTok) return;
-        const i = idx++;
-        await showDiffFile(+hs[i].dataset.i, true, expandTok, /*quiet*/ true);
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(CONC, hs.length) }, worker));
-    if (diffState.tok === expandTok) {
-      renderDiffSide();
-      if (diffState.sel >= 0) showDiffFile(diffState.sel, true, expandTok);
-      else renderDiffDetail();
-    }
-  };
   $("#diff-collapse").onclick = () => { diffState.sel = -1; renderDiffDetail(); renderDiffSide(); };
   c.innerHTML = '<div id="diff-detail" style="flex:1;overflow:auto;min-height:0;display:flex;flex-direction:column"></div>';
   hb.innerHTML = `<span><kbd>j</kbd>/<kbd>k</kbd> files · <kbd>Enter</kbd> open · <kbd>Ctrl+F</kbd> find</span>`;
-  renderCompareMain._tok = ++diffState.tok;
+  ++diffState.tok; // cancel any in-flight per-file load
   if (diffState.summary && diffState.summary.base === S.base && diffState.summary.head === S.head) {
     renderDiffSide(); renderDiffDetail();
   } else if (S.base && S.head) runDiff();
@@ -1785,7 +1831,6 @@ async function runDiff() {
   const info = $("#diff-tbinfo");
   if (info) info.textContent = "computing…";
   const tok = ++diffState.tok;
-  renderCompareMain._tok = tok;
   try {
     const s = await api(`/api/${S.repo}/diff?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
     if (tok !== diffState.tok) return;
@@ -1796,7 +1841,7 @@ async function runDiff() {
     if (info) info.textContent = diffState.info;
     $("#diff-filter") && ($("#diff-filter").value = "");
     renderDiffSide();
-    if (diffState.sel >= 0) showDiffFile(diffState.sel, true);
+    if (diffState.sel >= 0) showDiffFile(diffState.sel);
     else if (!s.files.length) {
       const d = $("#diff-detail");
       if (d) d.innerHTML = `<div class="empty">no changes <b>${esc(base)}</b> → <b>${esc(head)}</b></div>`;
@@ -1820,11 +1865,19 @@ function renderDiffSide() {
   if (!el) return;
   const files = diffState.files || [];
   const filter = ($("#diff-filter")?.value || "").trim().toLowerCase();
-  const shown = filter ? files.filter(f => f.path.toLowerCase().includes(filter) || (f.old_path || "").toLowerCase().includes(filter)) : files;
+  // object -> original index, built once: the old code called files.indexOf(f)
+  // inside the row map, which is O(n²) on 800+ file compares
+  const pos = new Map();
+  files.forEach((f, i) => pos.set(f, i));
+  let shown;
+  if (filter) {
+    const lf = asciiLower(filter);
+    shown = files.filter(f => asciiLower(f.path).includes(lf) || asciiLower(f.old_path || "").includes(lf));
+  } else shown = files;
   if (!files.length) { el.innerHTML = `<div class="empty">${diffState.summary ? `no changes ${esc(diffState.summary.base)} → ${esc(diffState.summary.head)}` : "no diff loaded"}</div>`; return; }
   el.innerHTML = `<div style="padding:5px 10px;border-bottom:1px solid var(--bd);color:var(--fg2);font-size:11px" class="num">${filter ? shown.length + " / " + files.length : files.length} files · <span class="a">+${diffState.summary.total_additions}</span> <span class="d">−${diffState.summary.total_deletions}</span></div>` +
     shown.map(f => {
-      const i = files.indexOf(f);
+      const i = pos.get(f);
       return `<div class="lrow${i === diffState.sel ? " sel" : ""}" data-i="${i}" style="height:28px">
         <span class="badge ${f.status}">${f.status}</span>
         <span class="grow mono" style="font-size:11px" title="${esc(f.path)}">${esc(f.path)}</span>
@@ -1835,9 +1888,15 @@ function renderDiffSide() {
     const r = e.target.closest(".lrow[data-i]");
     if (!r) return;
     diffState.sel = +r.dataset.i;
-    renderDiffSide();
-    showDiffFile(diffState.sel, true);
+    highlightDiffSide();
+    showDiffFile(diffState.sel);
   };
+}
+/// selection-only update: toggles .sel instead of rebuilding the list
+function highlightDiffSide() {
+  const el = $("#diff-side");
+  if (!el) return;
+  el.querySelectorAll(".lrow[data-i]").forEach(r => r.classList.toggle("sel", +r.dataset.i === diffState.sel));
 }
 function renderDiffDetail(msg) {
   const el = $("#diff-detail");
@@ -1846,26 +1905,16 @@ function renderDiffDetail(msg) {
   el.innerHTML = msg != null ? msg : '<div class="empty">select a file</div>';
 }
 function clearDiffVS() { if (diffVSObj) { diffVSObj.destroy(); diffVSObj = null; } }
-async function showDiffFile(index, replace, tokOverride, quiet) {
+async function showDiffFile(index) {
   const file = (diffState.files || [])[index];
   if (!file) return;
-  if (quiet) {
-    // fetch-only: warm the server resp-cache, skip all DOM work;
-    // caller renders once at the end of EXPAND
-    try {
-      let u = `/api/${S.repo}/file?base=${encodeURIComponent(diffState.summary.base)}&head=${encodeURIComponent(diffState.summary.head)}&path=${encodeURIComponent(file.path)}`;
-      if (file.old_path && file.old_path !== file.path) u += `&old_path=${encodeURIComponent(file.old_path)}`;
-      await api(u);
-    } catch { /* skip failed file */ }
-    return;
-  }
   diffState.sel = index;
   diffState.rows = null; // invalidate find against previous file
-  renderDiffSide();
+  highlightDiffSide(); // .sel toggle only — rebuild is O(files) and not needed here
   const el = $("#diff-detail");
   if (!el) return;
   clearDiffVS();
-  const tok = tokOverride !== undefined ? tokOverride : ++diffState.tok;
+  const tok = ++diffState.tok;
   let u = `/api/${S.repo}/file?base=${encodeURIComponent(diffState.summary.base)}&head=${encodeURIComponent(diffState.summary.head)}&path=${encodeURIComponent(file.path)}`;
   if (file.old_path && file.old_path !== file.path) u += `&old_path=${encodeURIComponent(file.old_path)}`;
   el.innerHTML = `<div class="code-head"><span class="badge ${file.status}">${file.status}</span><span class="path">${esc(file.path)}</span>${file.old_path && file.old_path !== file.path ? `<span class="dim">renamed from</span><span class="mono">${esc(file.old_path)}</span>` : ""}<span class="grow"></span><span class="num"><span class="a">+${file.additions}</span> <span class="d">−${file.deletions}</span></span></div><div class="vscroll" id="diff-scroll"></div><div class="code-head" style="border-top:1px solid var(--bd);border-bottom:none" id="diff-foot"></div>`;
@@ -2037,6 +2086,7 @@ addEventListener("keydown", (e) => {
     e.preventDefault(); // block native browser find — useless against virtualized lists
     return;
   }
+  if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); const box = $("#side-add"); box.style.display = "block"; $("#add-repo-input").focus(); return; }
   if (e.key === "Escape") {
     if (pal.open) { closePalette(); return; }
     if (inInput) { e.target.blur(); return; }
@@ -2059,8 +2109,8 @@ addEventListener("keydown", (e) => {
     let idx = rows.findIndex(r => +r.dataset.i === diffState.sel);
     idx = e.key === "j" ? Math.min(idx + 1, rows.length - 1) : Math.max(idx - 1, 0);
     diffState.sel = +rows[idx].dataset.i;
-    renderDiffSide();
-    showDiffFile(diffState.sel, true);
+    highlightDiffSide();
+    showDiffFile(diffState.sel);
     $(`#diff-side .lrow[data-i="${diffState.sel}"]`)?.scrollIntoView({ block: "nearest" });
   }
   if ((e.key === "j" || e.key === "k") && S.tab === "search" && searchState.flat?.length) {
