@@ -772,8 +772,8 @@ function hlLine(line, lang, stIn) {
       out += '<span class="n">' + esc(line.slice(i, j)) + "</span>";
       i = j; continue;
     }
-    // identifiers / keywords
-    if (/[A-Za-z_$@#]/.test(ch)) {
+    // identifiers / keywords — start ⊆ continue set, else @/# alone never advances i
+    if (/[A-Za-z_$]/.test(ch)) {
       let j = i;
       while (j < L && /[A-Za-z0-9_$]/.test(line[j])) j++;
       const w = line.slice(i, j);
@@ -784,7 +784,7 @@ function hlLine(line, lang, stIn) {
       i = j; continue;
     }
     // punctuation dim
-    if (/[{}()\[\];,.:=+\-*/%<>!&|^~?]/.test(ch)) {
+    if (/[{}()\[\];,.:=+\-*/%<>!&|^~?@#]/.test(ch)) {
       out += '<span class="p">' + esc(ch) + "</span>";
       i++; continue;
     }
