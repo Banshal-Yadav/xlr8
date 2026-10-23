@@ -520,7 +520,7 @@
   </section>
 
   <footer id="statusbar">
-    <span id="st-brand" class="dim">xlr8 v0.2.2</span>
+    <span id="st-brand" class="dim">xlr8</span>
     <span id="st-repo" class="dim"></span>
     <span id="st-ref" class="dim"></span>
     <span class="grow"></span>
@@ -584,6 +584,7 @@ let lastS = null, fetchedAt = 0;
 let lastFoot = "";
 function renderStats() {
   if (!lastS) return;
+  if (lastS.version) { const b = $("#st-brand"); const t = "xlr8 v" + lastS.version; if (b.textContent !== t) b.textContent = t; }
   const drift = Math.floor((Date.now() - fetchedAt) / 1000);
   $("#st-stats").textContent =
     "ram " + fmtBytes(lastS.rss) +

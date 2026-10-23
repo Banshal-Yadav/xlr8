@@ -204,6 +204,7 @@ async fn count_requests(req: Request, next: Next) -> Response {
 
 #[derive(Serialize)]
 struct StatsResp {
+    version: &'static str,
     rss: u64,
     cpu_ms: u64,
     uptime_s: u64,
@@ -232,6 +233,7 @@ async fn stats() -> Json<StatsResp> {
             .unwrap_or(0)
     };
     Json(StatsResp {
+        version: crate::cli::VERSION,
         rss,
         cpu_ms,
         uptime_s: START.get().map(|t| t.elapsed().as_secs()).unwrap_or(0),

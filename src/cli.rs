@@ -7,6 +7,8 @@ pub struct Cli {
     pub serve: bool,
 }
 
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 const USAGE: &str = "\
 xlr8 — GitHub in a box
 
@@ -15,9 +17,10 @@ usage:
   xlr8 --serve                      serve previously opened repos
 
 options:
-  --port <N>    listen on port N (default: ephemeral)
-  --no-open     do not open a browser
-  -h, --help    show this help";
+  --port <N>     listen on port N (default: ephemeral)
+  --no-open      do not open a browser
+  -V, --version  show version and exit
+  -h, --help     show this help";
 
 pub fn parse() -> Result<Cli> {
     let mut cli = Cli {
@@ -31,6 +34,10 @@ pub fn parse() -> Result<Cli> {
         match a.as_str() {
             "-h" | "--help" => {
                 println!("{USAGE}");
+                std::process::exit(0);
+            }
+            "-V" | "--version" => {
+                println!("xlr8 {VERSION}");
                 std::process::exit(0);
             }
             "--no-open" => cli.no_open = true,
