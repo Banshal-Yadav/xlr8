@@ -56,7 +56,7 @@ xlr8 --serve --port 7782        # serve all previously opened repos
 ```
 
 Opens `http://127.0.0.1:7782`. The repo is mirrored to `~/.cache/xlr8/mirrors/` and synced on request.
-Flags: `--port <p>` (default 7782) · `--serve` (multi-repo) · `--no-open` (don't launch browser).
+Flags: `--port <p>` (default 7782) · `--serve` (multi-repo) · `--no-open` (don't launch browser) · `-V, --version`.
 
 ## What it does
 
@@ -107,13 +107,19 @@ table above.
 
 ## HTTP API
 
+- `GET /api/repos` — list mirrored repos
+- `POST /api/sync` — mirror/sync a repo
+- `GET /api/stats` — runtime stats (version, RSS, CPU, cache, uptime)
 - `GET /api/{owner}/{repo}/refs` — branches, tags
+- `GET /api/{owner}/{repo}/meta?ref=REF&path=...` — file metadata (size, mode)
+- `GET /api/{owner}/{repo}/tree?ref=REF&path=DIR` — directory listing
+- `GET /api/{owner}/{repo}/files?ref=REF` — full file list
+- `GET /api/{owner}/{repo}/blob?ref=REF&path=...` — file contents
 - `GET /api/{owner}/{repo}/commits?limit=N&ref=REF&stats=1&count=1` — commit list
 - `GET /api/{owner}/{repo}/diff?base=REF&head=REF` — compare summary (+/− per file)
-- `GET /api/{owner}/{repo}/search?q=...` — path + grep search
+- `GET /api/{owner}/{repo}/search?q=...&ref=REF` — path + grep search (`grep:text`, `ext:rs`, `-neg`)
 - `GET /api/{owner}/{repo}/file?base=...&head=...&path=...` — file diff/hunks
-- `GET /api/repos` — list mirrored repos
-- `GET /api/stats` — runtime stats (RSS, CPU, cache, uptime)
+- `GET /api/{owner}/{repo}/pulls` — open pull requests (`GITHUB_TOKEN` raises the rate limit)
 
 ## Built with
 
