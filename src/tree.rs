@@ -35,7 +35,8 @@ pub fn list_dir(mirror: &PathBuf, refspec: &str, path: &str) -> Result<TreeResp>
     } else {
         let Some(entry) = tree.lookup_entry_by_path(path).map_err(|_| {
             crate::diff::not_found(format!("path not found (or crosses a submodule): {path}"))
-        })? else {
+        })?
+        else {
             return Err(crate::diff::not_found(format!("path not found: {path}")));
         };
         if !entry.mode().is_tree() {
@@ -124,11 +125,9 @@ pub fn file_meta(mirror: &PathBuf, refspec: &str, path: &str) -> Result<FileMeta
     let repo = crate::repo::handle(&tsr);
     let root = crate::diff::commit_of(&repo, refspec)?;
     let tree = root.tree()?;
-    let Some(entry) = tree
-        .lookup_entry_by_path(path)
-        .map_err(|_| {
-            crate::diff::not_found(format!("path not found (or crosses a submodule): {path}"))
-        })?
+    let Some(entry) = tree.lookup_entry_by_path(path).map_err(|_| {
+        crate::diff::not_found(format!("path not found (or crosses a submodule): {path}"))
+    })?
     else {
         return Err(crate::diff::not_found(format!("path not found: {path}")));
     };

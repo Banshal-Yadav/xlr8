@@ -586,9 +586,12 @@ function renderStats() {
   if (!lastS) return;
   if (lastS.version) { const b = $("#st-brand"); const t = "xlr8 v" + lastS.version; if (b.textContent !== t) b.textContent = t; }
   const drift = Math.floor((Date.now() - fetchedAt) / 1000);
+  // 0 means the platform probe is unavailable, not "used zero bytes"
+  const ram = lastS.rss ? fmtBytes(lastS.rss) : "—";
+  const cpu = lastS.cpu_ms ? (lastS.cpu_ms / 1000).toFixed(1) + "s" : "—";
   $("#st-stats").textContent =
-    "ram " + fmtBytes(lastS.rss) +
-    " · cpu " + (lastS.cpu_ms / 1000).toFixed(1) + "s" +
+    "ram " + ram +
+    " · cpu " + cpu +
     " · up " + fmtDur(lastS.uptime_s + drift) +
     " · cache " + fmtBytes(lastS.cache_bytes) + "/32m" +
     " · reqs " + lastS.reqs;

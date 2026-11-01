@@ -245,8 +245,9 @@ async fn stats() -> Json<StatsResp> {
 }
 
 /// Resident set size (bytes) and cumulative CPU time (ms) of this process.
-/// Linux/Android read /proc; Windows uses kernel32/psapi via raw FFI (no deps).
-#[cfg(not(windows))]
+/// Linux/Android read /proc; macOS uses task_info; Windows uses kernel32/psapi
+/// via raw FFI. All three avoid a libc/winapi dependency.
+#[cfg(all(unix, not(target_os = "macos")))]
 fn sys_stats() -> (u64, u64) {
     let mut rss = 0u64;
     if let Ok(s) = std::fs::read_to_string("/proc/self/status") {
@@ -275,6 +276,46 @@ fn sys_stats() -> (u64, u64) {
                 let st: u64 = f[12].parse().unwrap_or(0);
                 cpu_ms = (ut + st) * 10;
             }
+        }
+    }
+    (rss, cpu_ms)
+}
+
+#[cfg(target_os = "macos")]
+fn sys_stats() -> (u64, u64) {
+    extern "C" {
+        // global exported by libSystem; its address is the current task port
+        static mut mach_task_self_: u32;
+        fn task_info(task: u32, flavor: u32, info: *mut MachTaskBasicInfo, count: *mut u32) -> i32;
+    }
+    /// mach_task_basic_info_data_t — 48 bytes.
+    #[repr(C)]
+    struct MachTaskBasicInfo {
+        virtual_size: u64,
+        resident_size: u64,
+        resident_size_max: u64,
+        user_time_sec: u32,
+        user_time_usec: u32,
+        system_time_sec: u32,
+        system_time_usec: u32,
+        policy: i32,
+        suspend_count: i32,
+    }
+    const MACH_TASK_BASIC_INFO: u32 = 20;
+    const COUNT: u32 = (std::mem::size_of::<MachTaskBasicInfo>() / 4) as u32;
+
+    let mut info: MachTaskBasicInfo = unsafe { std::mem::zeroed() };
+    let mut count = COUNT;
+    let mut rss = 0u64;
+    let mut cpu_ms = 0u64;
+    unsafe {
+        if task_info(mach_task_self_, MACH_TASK_BASIC_INFO, &mut info, &mut count) == 0
+            && count >= COUNT
+        {
+            rss = info.resident_size;
+            let secs = info.user_time_sec as u64 + info.system_time_sec as u64;
+            let usecs = info.user_time_usec as u64 + info.system_time_usec as u64;
+            cpu_ms = secs * 1000 + usecs / 1000;
         }
     }
     (rss, cpu_ms)
@@ -373,7 +414,8 @@ struct SyncResp {
 
 async fn sync_repo(Json(req): Json<SyncReq>) -> Result<Json<SyncResp>, (StatusCode, String)> {
     // bad repo syntax is caller error (the web UI add-repo box) → 400, not 500
-    let repo = mirror::RepoRef::parse(&req.repo).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let repo =
+        mirror::RepoRef::parse(&req.repo).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
     let canonical = repo.canonical();
     let clone = repo.clone();
     let path = tokio::task::spawn_blocking(move || mirror::sync(&clone))

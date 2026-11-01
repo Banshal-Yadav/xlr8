@@ -180,7 +180,10 @@ fn explain(stderr: &str, repo: &RepoRef) -> String {
     if s.contains("could not resolve host") || s.contains("name or service not known") {
         return format!("{name}: cannot reach github — DNS lookup failed (offline?)");
     }
-    if s.contains("failed to connect") || s.contains("connection timed out") || s.contains("operation timed out") {
+    if s.contains("failed to connect")
+        || s.contains("connection timed out")
+        || s.contains("operation timed out")
+    {
         return format!("{name}: cannot connect to github — connection timed out");
     }
     if s.contains("low speed") || s.contains("remote end hung up") || s.contains("early eof") {

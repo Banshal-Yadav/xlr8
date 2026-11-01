@@ -543,7 +543,8 @@ pub fn blob_text(mirror: &PathBuf, refspec: &str, path: &str) -> Result<BlobResp
     let path = path.trim_matches('/');
     let Some(entry) = tree.lookup_entry_by_path(path).map_err(|_| {
         crate::diff::not_found(format!("path not found (or crosses a submodule): {path}"))
-    })? else {
+    })?
+    else {
         return Err(crate::diff::not_found(format!("path not found: {path}")));
     };
     let mode = entry.mode();
