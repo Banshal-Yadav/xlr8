@@ -1187,7 +1187,16 @@ function renderSide() {
     $("#base-ref").onchange = (e) => { S.base = e.target.value; saveHash(); };
     $("#head-ref").onchange = (e) => { S.head = e.target.value; saveHash(); };
     $("#diff-btn").onclick = runDiff;
-    $("#diff-filter").addEventListener("input", debounce(() => { if (diffState.files) renderDiffSide(); }, 90));
+    $("#diff-filter").addEventListener("input", debounce(() => {
+      if (!diffState.files) return;
+      // jump to the first visible file when the filter hides the selected one,
+      // otherwise the list shows no selection while the pane keeps a stale diff
+      const shown = diffFiltered();
+      if (diffState.sel >= 0 && !shown.includes(diffState.files[diffState.sel]) && shown.length) {
+        showDiffFile(diffState.files.indexOf(shown[0]));
+      }
+      renderDiffSide();
+    }, 90));
     body.innerHTML = '<div id="diff-side"></div>';
     if (diffState.summary) renderDiffSide();
   } else if (S.tab === "pulls") {
@@ -1854,7 +1863,12 @@ function renderCompareMain(tb, c, hb) {
   hb.innerHTML = `<span><kbd>j</kbd>/<kbd>k</kbd> files · <kbd>Enter</kbd> open · <kbd>Ctrl+F</kbd> find</span>`;
   ++diffState.tok; // cancel any in-flight per-file load
   if (diffState.summary && diffState.summary.base === S.base && diffState.summary.head === S.head) {
-    renderDiffSide(); renderDiffDetail();
+    // returning to this tab: rebuild the list, then re-render whatever file was
+    // selected — renderDiffDetail() alone would blank the pane while the row
+    // stayed highlighted, leaving a "selected" file with no diff under it
+    renderDiffSide();
+    if (diffState.sel >= 0) showDiffFile(diffState.sel);
+    else renderDiffDetail();
   } else if (S.base && S.head) runDiff();
   else { $("#diff-detail").innerHTML = '<div class="empty">pick base…head above, press <b>DIFF</b></div>'; renderDiffSide(); }
 }
@@ -1897,6 +1911,13 @@ async function runDiff() {
     }
   }
 }
+function diffFiltered() {
+  const files = diffState.files || [];
+  const q = ($("#diff-filter")?.value || "").trim();
+  if (!q) return files;
+  const lf = asciiLower(q);
+  return files.filter(f => asciiLower(f.path).includes(lf) || asciiLower(f.old_path || "").includes(lf));
+}
 function renderDiffSide() {
   const el = $("#diff-side");
   if (!el) return;
@@ -1906,11 +1927,7 @@ function renderDiffSide() {
   // inside the row map, which is O(n²) on 800+ file compares
   const pos = new Map();
   files.forEach((f, i) => pos.set(f, i));
-  let shown;
-  if (filter) {
-    const lf = asciiLower(filter);
-    shown = files.filter(f => asciiLower(f.path).includes(lf) || asciiLower(f.old_path || "").includes(lf));
-  } else shown = files;
+  const shown = diffFiltered();
   if (!files.length) { el.innerHTML = `<div class="empty">${diffState.summary ? `no changes ${esc(diffState.summary.base)} → ${esc(diffState.summary.head)}` : "no diff loaded"}</div>`; return; }
   el.innerHTML = `<div style="padding:5px 10px;border-bottom:1px solid var(--bd);color:var(--fg2);font-size:11px" class="num">${filter ? shown.length + " / " + files.length : files.length} files · <span class="a">+${diffState.summary.total_additions}</span> <span class="d">−${diffState.summary.total_deletions}</span></div>` +
     shown.map(f => {
@@ -1935,11 +1952,11 @@ function highlightDiffSide() {
   if (!el) return;
   el.querySelectorAll(".lrow[data-i]").forEach(r => r.classList.toggle("sel", +r.dataset.i === diffState.sel));
 }
-function renderDiffDetail(msg) {
+function renderDiffDetail() {
   const el = $("#diff-detail");
   if (!el) return;
   clearDiffVS();
-  el.innerHTML = msg != null ? msg : '<div class="empty">select a file</div>';
+  el.innerHTML = '<div class="empty">select a file</div>';
 }
 function clearDiffVS() { if (diffVSObj) { diffVSObj.destroy(); diffVSObj = null; } }
 async function showDiffFile(index) {

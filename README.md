@@ -13,7 +13,7 @@ xlr8 owner/repo
 
 ![xlr8 commits view](assets/screenshot_commits.png)
 
-<p align="center"><sub>tokio: 4,783 commits, browsed locally</sub></p>
+<p align="center"><sub>tokio: 4,850 commits, browsed locally</sub></p>
 
 <table>
   <tr>
@@ -21,7 +21,7 @@ xlr8 owner/repo
     <td><img src="assets/screenshot_diffs_preview.png" alt="Diff view" width="100%"></td>
   </tr>
   <tr>
-    <td align="center"><sub>tokio, 881 files compared in ~46 ms</sub></td>
+    <td align="center"><sub>tokio, 867 files compared in ~43 ms</sub></td>
     <td align="center"><sub>GitHub-style diffs</sub></td>
   </tr>
   <tr>
