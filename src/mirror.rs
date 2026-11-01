@@ -53,20 +53,23 @@ pub fn cache_dir() -> &'static PathBuf {
     DIR.get_or_init(compute_cache_dir)
 }
 
+/// `%LOCALAPPDATA%` on Windows, nothing elsewhere — kept as a separate fn so the
+/// fallback chain has no `#[cfg]`-empty closure that clippy flags per-platform.
+#[cfg(windows)]
+fn platform_cache_base() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
+}
+
+#[cfg(not(windows))]
+fn platform_cache_base() -> Option<PathBuf> {
+    None
+}
+
 fn compute_cache_dir() -> PathBuf {
     let base = std::env::var_os("XDG_CACHE_HOME")
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
-        .or_else(|| {
-            #[cfg(windows)]
-            {
-                std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
-            }
-            #[cfg(not(windows))]
-            {
-                None
-            }
-        })
+        .or_else(platform_cache_base)
         .unwrap_or_else(|| {
             let home = std::env::var_os("HOME")
                 .or_else(|| std::env::var_os("USERPROFILE"))
