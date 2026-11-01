@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/xlr8_repo_banner.png" alt="xlr8" width="100%"></p>
+
 # xlr8
 
 **GitHub in a box: instant local web viewer for any repo.**
