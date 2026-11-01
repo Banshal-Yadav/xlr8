@@ -305,17 +305,15 @@ pub fn detect(
                 entry_mode,
                 id,
                 ..
-            } => {
-                if pairable(*entry_mode) && !id.is_empty_blob() {
-                    items.push(Item {
-                        change_idx: i,
-                        dest: false,
-                        id: *id,
-                        mode: *entry_mode,
-                        path: location.clone(),
-                        emitted: false,
-                    });
-                }
+            } if pairable(*entry_mode) && !id.is_empty_blob() => {
+                items.push(Item {
+                    change_idx: i,
+                    dest: false,
+                    id: *id,
+                    mode: *entry_mode,
+                    path: location.clone(),
+                    emitted: false,
+                });
             }
             _ => {}
         }

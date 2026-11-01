@@ -32,7 +32,11 @@ struct RefIndex {
     ents: Vec<Ent>,
 }
 
-static IDX: OnceLock<Mutex<HashMap<(PathBuf, gix::ObjectId), Arc<RefIndex>>>> = OnceLock::new();
+/// Cached per-(mirror, commit) search index. The tuple is (mirror path, commit id).
+type IndexKey = (PathBuf, gix::ObjectId);
+type IndexCache = OnceLock<Mutex<HashMap<IndexKey, Arc<RefIndex>>>>;
+
+static IDX: IndexCache = OnceLock::new();
 
 #[derive(serde::Serialize)]
 pub struct FileHit {
@@ -290,7 +294,7 @@ pub fn prewarm_index(mirror: &Path, repo: &gix::Repository, commit: gix::ObjectI
 
 /// Every blob path at `ref`, sorted — one tree walk via the search index
 /// (cached per commit), reused by the tree browser's quick-open palette.
-pub fn all_paths(mirror: &PathBuf, refspec: &str) -> Result<Vec<String>> {
+pub fn all_paths(mirror: &Path, refspec: &str) -> Result<Vec<String>> {
     let tsr = crate::repo::get(mirror)?;
     let repo = crate::repo::handle(&tsr);
     let commit = crate::diff::commit_of(&repo, refspec)?.id().detach();
@@ -303,7 +307,7 @@ pub fn all_paths(mirror: &PathBuf, refspec: &str) -> Result<Vec<String>> {
         .collect())
 }
 
-pub fn search(mirror: &PathBuf, refspec: &str, q: &str) -> Result<SearchResp> {
+pub fn search(mirror: &Path, refspec: &str, q: &str) -> Result<SearchResp> {
     let t0 = Instant::now();
     let tsr = crate::repo::get(mirror)?;
     let repo = crate::repo::handle(&tsr);
@@ -503,39 +507,7 @@ pub fn search(mirror: &PathBuf, refspec: &str, q: &str) -> Result<SearchResp> {
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn directives_are_case_insensitive() {
-        let p = parse("GREP:Decoder EXT:RS Content:Index -GREP:Legacy");
-        assert_eq!(p.greps, vec![b"decoder".to_vec(), b"index".to_vec()]);
-        assert_eq!(p.neg_greps, vec![b"legacy".to_vec()]);
-        assert_eq!(p.exts, vec![b"rs".to_vec()]);
-    }
-
-    #[test]
-    fn content_terms_can_match_different_lines() {
-        let data = b"decoder starts\nthen index continues\n";
-        assert!(contains_ci(data, b"decoder"));
-        assert!(contains_ci(data, b"index"));
-        let lines: Vec<&[u8]> = data
-            .split(|&b| b == b'\n')
-            .filter(|line| contains_ci(line, b"decoder") || contains_ci(line, b"index"))
-            .collect();
-        assert_eq!(lines.len(), 2);
-    }
-
-    #[test]
-    fn ascii_casefold_preserves_unicode_offsets() {
-        let text = "İ Decoder";
-        let folded: String = text.chars().map(|c| c.to_ascii_lowercase()).collect();
-        assert_eq!(folded.find("decoder"), Some(3));
-    }
-}
-
-pub fn blob_text(mirror: &PathBuf, refspec: &str, path: &str) -> Result<BlobResp> {
+pub fn blob_text(mirror: &Path, refspec: &str, path: &str) -> Result<BlobResp> {
     let tsr = crate::repo::get(mirror)?;
     let repo = crate::repo::handle(&tsr);
     let commit = crate::diff::commit_of(&repo, refspec)?;
@@ -592,4 +564,35 @@ pub fn blob_text(mirror: &PathBuf, refspec: &str, path: &str) -> Result<BlobResp
         size,
         lines,
     })
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn directives_are_case_insensitive() {
+        let p = parse("GREP:Decoder EXT:RS Content:Index -GREP:Legacy");
+        assert_eq!(p.greps, vec![b"decoder".to_vec(), b"index".to_vec()]);
+        assert_eq!(p.neg_greps, vec![b"legacy".to_vec()]);
+        assert_eq!(p.exts, vec![b"rs".to_vec()]);
+    }
+
+    #[test]
+    fn content_terms_can_match_different_lines() {
+        let data = b"decoder starts\nthen index continues\n";
+        assert!(contains_ci(data, b"decoder"));
+        assert!(contains_ci(data, b"index"));
+        let lines: Vec<&[u8]> = data
+            .split(|&b| b == b'\n')
+            .filter(|line| contains_ci(line, b"decoder") || contains_ci(line, b"index"))
+            .collect();
+        assert_eq!(lines.len(), 2);
+    }
+
+    #[test]
+    fn ascii_casefold_preserves_unicode_offsets() {
+        let text = "İ Decoder";
+        let folded: String = text.chars().map(|c| c.to_ascii_lowercase()).collect();
+        assert_eq!(folded.find("decoder"), Some(3));
+    }
 }

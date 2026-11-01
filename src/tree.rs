@@ -7,7 +7,7 @@
 use anyhow::{Context, Result};
 use gix::bstr::ByteSlice;
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::Path;
 
 #[derive(Serialize)]
 pub struct TreeEntry {
@@ -23,7 +23,7 @@ pub struct TreeResp {
     pub took_ms: u128,
 }
 
-pub fn list_dir(mirror: &PathBuf, refspec: &str, path: &str) -> Result<TreeResp> {
+pub fn list_dir(mirror: &Path, refspec: &str, path: &str) -> Result<TreeResp> {
     let t0 = std::time::Instant::now();
     let path = path.trim_matches('/');
     let tsr = crate::repo::get(mirror)?;
@@ -91,7 +91,7 @@ pub fn list_dir(mirror: &PathBuf, refspec: &str, path: &str) -> Result<TreeResp>
 
 /// Every blob path at `ref`, sorted — served from the search path index
 /// (one tree walk, cached per commit id).
-pub fn all_paths(mirror: &PathBuf, refspec: &str) -> Result<Vec<String>> {
+pub fn all_paths(mirror: &Path, refspec: &str) -> Result<Vec<String>> {
     crate::search::all_paths(mirror, refspec)
 }
 
@@ -118,7 +118,7 @@ pub struct FileMeta {
 /// commits scanned before giving up on finding the last toucher
 const WALK_BUDGET: usize = 8000;
 
-pub fn file_meta(mirror: &PathBuf, refspec: &str, path: &str) -> Result<FileMeta> {
+pub fn file_meta(mirror: &Path, refspec: &str, path: &str) -> Result<FileMeta> {
     let t0 = std::time::Instant::now();
     let path = path.trim_matches('/');
     let tsr = crate::repo::get(mirror)?;

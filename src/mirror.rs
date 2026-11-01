@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(Clone)]
@@ -165,7 +165,7 @@ fn clone_mirror(repo: &RepoRef, dest: &PathBuf) -> Result<()> {
     run(cmd, repo)
 }
 
-fn fetch(repo: &RepoRef, mirror: &PathBuf) -> Result<()> {
+fn fetch(repo: &RepoRef, mirror: &Path) -> Result<()> {
     let mut cmd = git();
     cmd.args(["fetch", "--all", "--prune", "-q"])
         .current_dir(mirror);

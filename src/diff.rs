@@ -3,7 +3,7 @@ use gix::bstr::ByteSlice;
 use gix::object::tree::diff::ChangeDetached as Change;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 
 #[derive(Debug)]
@@ -123,7 +123,7 @@ pub(crate) fn blob_facts(data: &[u8]) -> (u64, u64, bool) {
     (data.len() as u64, lines, false)
 }
 
-pub fn compare(mirror: &PathBuf, base: &str, head: &str) -> Result<DiffSummary> {
+pub fn compare(mirror: &Path, base: &str, head: &str) -> Result<DiffSummary> {
     let t0 = std::time::Instant::now();
     let tsr = crate::repo::get(mirror)?;
     let repo = crate::repo::handle(&tsr);
@@ -183,11 +183,13 @@ pub fn compare(mirror: &PathBuf, base: &str, head: &str) -> Result<DiffSummary> 
 /// caller's tuple index — commits pass their commit index, compare passes
 /// the change position.
 fn fill_stats(
-    mirror: &std::path::PathBuf,
+    mirror: &Path,
     tsr: &std::sync::Arc<gix::ThreadSafeRepository>,
     changes: Vec<(usize, Change)>,
 ) -> Result<Vec<(usize, FileStat)>> {
     const STAT_CHUNK: usize = 16;
+    // stat_chunk takes ownership so worker threads can keep it alive
+    let mirror = mirror.to_path_buf();
     let mut collected: Vec<(usize, FileStat)> = Vec::new();
     if changes.len() <= STAT_CHUNK {
         if !changes.is_empty() {
@@ -366,7 +368,7 @@ fn stat_chunk(
 const CTX: usize = 3;
 
 pub fn file_diff(
-    mirror: &PathBuf,
+    mirror: &Path,
     base: &str,
     head: &str,
     path: &str,
@@ -609,8 +611,8 @@ fn line_stats(old: &[u8], new: &[u8]) -> (u32, u32) {
         imara_diff::Algorithm::Myers,
         &input,
         |before: std::ops::Range<u32>, after: std::ops::Range<u32>| {
-            deletions += (before.end - before.start) as u32;
-            additions += (after.end - after.start) as u32;
+            deletions += before.end - before.start;
+            additions += after.end - after.start;
         },
     );
     (additions, deletions)
@@ -674,7 +676,7 @@ pub struct CommitInfo {
 }
 
 pub fn commits(
-    mirror: &PathBuf,
+    mirror: &Path,
     limit: usize,
     refspec: Option<&str>,
     want_stats: bool,
@@ -756,6 +758,8 @@ pub fn commits(
         let chunk = n_ids.div_ceil(n_threads).max(1);
         let ids_arc = std::sync::Arc::new(ids);
         let parents_arc = std::sync::Arc::new(parents);
+        // worker threads own their path handle, so convert once here
+        let mirror = mirror.to_path_buf();
         let mut all: Vec<(usize, Change)> = Vec::new();
         let mut handles = Vec::new();
         for start in (0..n_ids).step_by(chunk) {
@@ -795,7 +799,7 @@ pub fn commits(
                 .map_err(|_| anyhow::anyhow!("commit-stats worker panicked"))??;
             all.extend(part);
         }
-        let collected = fill_stats(mirror, &tsr, all)?;
+        let collected = fill_stats(&mirror, &tsr, all)?;
         let mut acc: Vec<(u32, u32, usize)> = vec![(0, 0, 0); out.len()];
         for (i, stat) in collected {
             acc[i].0 += stat.additions;
@@ -850,7 +854,7 @@ fn count_key(repo: &gix::Repository, spec: &str) -> String {
     hash_hex(&parts.join("\n"))
 }
 
-pub fn commit_count(mirror: &PathBuf, refspec: Option<&str>) -> Result<usize> {
+pub fn commit_count(mirror: &Path, refspec: Option<&str>) -> Result<usize> {
     let tsr = crate::repo::get(mirror)?;
     let repo = crate::repo::handle(&tsr);
     let spec = refspec.unwrap_or("HEAD");
@@ -936,7 +940,7 @@ pub(crate) fn clear_ref_cache(path: &std::path::Path) {
     }
 }
 
-pub fn refs(mirror: &PathBuf) -> Result<Vec<RefInfo>> {
+pub fn refs(mirror: &Path) -> Result<Vec<RefInfo>> {
     let cache = REF_CACHE.get_or_init(Default::default);
     if let Ok(m) = cache.read() {
         if let Some(v) = m.get(mirror) {
@@ -1018,7 +1022,7 @@ pub fn refs(mirror: &PathBuf) -> Result<Vec<RefInfo>> {
     }
     v.sort_by(|a, b| a.name.cmp(&b.name));
     if let Ok(mut m) = cache.write() {
-        m.insert(mirror.clone(), v.clone());
+        m.insert(mirror.to_path_buf(), v.clone());
     }
     Ok(v)
 }

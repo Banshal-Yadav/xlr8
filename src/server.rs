@@ -374,7 +374,7 @@ fn sys_stats() -> (u64, u64) {
         let (mut c, mut e, mut k, mut u): (FileTime, FileTime, FileTime, FileTime) =
             (zeroed(), zeroed(), zeroed(), zeroed());
         if GetProcessTimes(handle, &mut c, &mut e, &mut k, &mut u) != 0 {
-            let ticks = |t: &FileTime| ((t.high as u64) << 32 | t.low as u64) as u64;
+            let ticks = |t: &FileTime| ((t.high as u64) << 32) | t.low as u64;
             // FILETIME is 100 ns units → /10_000 = ms
             cpu_ms = (ticks(&k) + ticks(&u)) / 10_000;
         }
