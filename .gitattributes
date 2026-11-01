@@ -1,0 +1,18 @@
+# Normalize line endings so `cargo fmt --check` in CI (Linux) and a Windows
+# checkout agree. The index is already all LF; this keeps it that way and stops
+# git's autocrlf from re-dirtying the worktree.
+* text=auto eol=lf
+
+# Windows batch scripts would break with LF, but there are none today — add
+# `*.bat text eol=crlf` / `*.cmd text eol=crlf` here if that changes.
+
+# Binaries must never be line-ending converted or diffed as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.gz binary
+*.pdf binary
+*.exe binary
