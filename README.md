@@ -44,19 +44,26 @@ cd xlr8
 cargo build --release
 ```
 
-Binary: `target/release/xlr8` (~5 MB). Requires the Rust toolchain ([rustup](https://rustup.rs)).
-Other platforms (macOS, Android/Termux): build from source. Prebuilt binaries
-cover x86_64 and aarch64 on both Windows and Linux.
+Binary: `target/release/xlr8` (~5 MB). Building requires the Rust toolchain
+([rustup](https://rustup.rs)); **running requires `git` on your `PATH`**, which xlr8
+shells out to for cloning and syncing mirrors. Other platforms (macOS,
+Android/Termux): build from source. Prebuilt binaries cover x86_64 and aarch64 on
+both Windows and Linux.
 
 ## Usage
 
 ```
-xlr8 owner/repo --port 7782     # open one repo
+xlr8 owner/repo                 # open one repo (ephemeral port, browser opened)
+xlr8 owner/repo --port 7782     # pin the port
 xlr8 --serve --port 7782        # serve all previously opened repos
 ```
 
-Opens `http://127.0.0.1:7782`. The repo is mirrored to `~/.cache/xlr8/mirrors/` and synced on request.
-Flags: `--port <p>` (default 7782) · `--serve` (multi-repo) · `--no-open` (don't launch browser) · `-V, --version`.
+The port is **ephemeral unless you pass `--port`** — the URL is printed at startup
+and opened in the browser. Mirrors live in the platform cache directory: `%LOCALAPPDATA%\xlr8`
+on Windows, `~/Library/Caches/xlr8` on macOS, `$XDG_CACHE_HOME/xlr8` (default `~/.cache/xlr8`)
+elsewhere. A requested repo is mirrored once and synced on demand.
+
+Flags: `--port <p>` (default: ephemeral) · `--serve` (multi-repo) · `--no-open` (don't launch browser) · `-V, --version`.
 
 ## What it does
 
